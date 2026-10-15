@@ -85,6 +85,10 @@ Backend conventions:
 
 Security rules:
 - Never commit `.env` files or secrets.
+- Keep local Vite configuration in `frontend/.env.example` and never check in user settings.
+- Use `SYSTEM_ADMIN_EMAIL` for owner-only global OAuth management.
+- Deployment and database backups must happen outside the dashboard using supported MySQL tools.
+- Render avatars and folder icons locally to avoid sending user data to demo asset hosts.
 - Never log access tokens, refresh tokens, OAuth client secrets, JWT secrets, encryption keys, or raw public share tokens.
 - Google tokens are encrypted before database storage.
 - App refresh tokens are hashed before database storage.

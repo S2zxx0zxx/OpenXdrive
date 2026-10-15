@@ -16,3 +16,8 @@ backend/.env.*.local
 # Local env is non-secret by default, keep example in repo instead.
 frontend/.env.local
 frontend/.env.*.local
+
+# Commit examples, never local frontend configuration
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
