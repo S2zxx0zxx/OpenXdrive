@@ -22,6 +22,18 @@ jobs:
             echo 'Legacy brand remains in tracked file contents'
             exit 1
           fi
+      - name: Check private configuration and asset dependencies
+        shell: bash
+        run: |
+          if git ls-files --error-unmatch frontend/.env >/dev/null 2>&1; then
+            echo "A local frontend environment file is tracked"
+            exit 1
+          fi
+          if git grep -n -E 'pravatar\\.cc|api\\.dicebear\\.com|www\\.gravatar\\.com' -- frontend/src; then
+            echo "A third-party demo avatar dependency remains"
+            exit 1
+          fi
+          node -e "const fs=require('fs'); for(const part of ['frontend','backend']) { const p=JSON.parse(fs.readFileSync(part+'/package.json')); const l=JSON.parse(fs.readFileSync(part+'/package-lock.json')); if(p.name!=='openxdrive-'+part || l.name!==p.name || l.packages[''].name!==p.name) process.exit(1) }"
       - name: Install backend dependencies
         working-directory: backend
         run: npm ci
