@@ -31,6 +31,30 @@ Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for detai
 - Express + TypeScript backend.
 - React + Vite frontend.
 
+## Production administration and data safety
+
+Configure `SYSTEM_ADMIN_EMAIL` on the backend to the email of an existing
+OpenXdrive account before using the global Google OAuth configuration panel.
+The setting is optional, but admin-only operations stay inaccessible without it.
+
+```dotenv
+SYSTEM_ADMIN_EMAIL=owner@example.com
+```
+
+The browser does not run server-side Git commands or perform SQLite database
+replacement. Deploy trusted releases using GitHub Actions and your hosting
+platform, and back up the MySQL database using database-native tooling.
+
+An existing installation may have saved data in its dedicated storage folder.
+Before syncing after an upgrade, rename that existing Google Drive folder to
+`OpenXdrive` without deleting its contents, and retain a verified database
+backup. Existing S3 object prefixes and saved database records are deliberately
+left unchanged to avoid broken object paths.
+
+Third-party software and libraries retain their respective licenses and
+copyright requirements. Rebranding a product is not a transfer of underlying
+copyright ownership. See [LICENSE](LICENSE).
+
 ## Project Structure
 
 ```txt
@@ -502,9 +526,9 @@ Copy the example environment file to `.env`:
 cp .env.docker.example .env
 ```
 Edit the `.env` file (e.g., `nano .env`) and configure the values for your production VPS domain/IP:
-* **`FRONTEND_URL`**: Set to your public domain or VPS IP (e.g., `http://103.xxx.xxx.xxx:5173` or `https://openxdrive.example.com`).
-* **`VITE_API_URL`**: Set to your public backend URL (e.g., `http://103.xxx.xxx.xxx:4000` or `https://api.openxdrive.example.com`).
-* **`GOOGLE_REDIRECT_URI`**: Set to your public redirect callback URL (e.g., `http://103.xxx.xxx.xxx:4000/connected-accounts/google/callback`).
+* **`FRONTEND_URL`**: Set to your public domain or VPS IP (e.g., `http://your-vps-ip:5173` or `https://openxdrive.example.com`).
+* **`VITE_API_URL`**: Set to your public backend URL (e.g., `http://your-vps-ip:4000` or `https://api.openxdrive.example.com`).
+* **`GOOGLE_REDIRECT_URI`**: Set to your public redirect callback URL (e.g., `http://your-vps-ip:4000/connected-accounts/google/callback`).
 * Set secure credentials for **`JWT_ACCESS_SECRET`** and **`TOKEN_ENCRYPTION_KEY`** (encryption key must be exactly 32 characters/bytes).
 * Add your **`GOOGLE_CLIENT_ID`** and **`GOOGLE_CLIENT_SECRET`**.
 
