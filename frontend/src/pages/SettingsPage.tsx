@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card'
 import { DummyModal } from '@/components/drive/DummyModal'
 import { PageHeader } from '@/components/drive/PageHeader'
 import { apiFetch, formatBytes } from '@/lib/api'
-import { getGravatarUrl } from '@/lib/gravatar'
+import { getLocalAvatarUrl } from '@/lib/avatar'
 import { getStoredUser } from '@/lib/auth'
 
 type ConnectedAccount = { id: string; provider: string; email: string; displayName?: string | null; status: string; storageAccount?: { totalBytes: string | null; usedBytes: string; availableBytes: string | null; lastSyncedAt: string | null } | null }
@@ -96,7 +96,7 @@ export function SettingsPage() {
 
   useEffect(() => {
     setAvatarError(false)
-    getGravatarUrl(user?.email, 96).then(setProfileImageUrl).catch(() => setProfileImageUrl(''))
+    getLocalAvatarUrl(user?.email, 96).then(setProfileImageUrl).catch(() => setProfileImageUrl(''))
   }, [user?.email])
 
   useEffect(() => {

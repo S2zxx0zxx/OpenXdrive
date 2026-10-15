@@ -31,7 +31,7 @@ import { Input } from '@/components/ui/input'
 import { apiFetch, formatBytes } from '@/lib/api'
 import { useUpload } from '@/context/UploadContext'
 import { clearAuthSession, getStoredUser, updateStoredUser, type AuthUser } from '@/lib/auth'
-import { getGravatarUrl } from '@/lib/gravatar'
+import { getLocalAvatarUrl } from '@/lib/avatar'
 import { cn } from '@/lib/utils'
 
 const menu = [
@@ -122,7 +122,7 @@ function Sidebar({ onNavigate, user, storage, breakdown, onLogout }: { onNavigat
 
   useEffect(() => {
     setAvatarError(false)
-    getGravatarUrl(user?.email, 64).then(setProfileImageUrl).catch(() => setProfileImageUrl(''))
+    getLocalAvatarUrl(user?.email, 64).then(setProfileImageUrl).catch(() => setProfileImageUrl(''))
   }, [user?.email])
 
   return (

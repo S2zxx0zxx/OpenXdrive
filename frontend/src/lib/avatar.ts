@@ -1,6 +1,6 @@
 // Create a deterministic, locally rendered OpenXdrive avatar. This avoids
 // revealing email hashes and page visits to remote avatar providers.
-export async function getGravatarUrl(email: string | undefined, size: number): Promise<string> {
+export async function getLocalAvatarUrl(email: string | undefined, size: number): Promise<string> {
   const normalized = email?.trim().toLowerCase() || 'user'
   const namePart = normalized.split('@')[0]
   const initials = (namePart.match(/[a-z0-9]/g) ?? ['U']).slice(0, 2).join('').toUpperCase()
