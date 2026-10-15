@@ -328,7 +328,8 @@ export function SettingsPage() {
               </div>
             </form>
           </Card>
-           <Card className="overflow-hidden p-4">
+          )}
+          <Card className="overflow-hidden p-4">
             <h2 className="text-[16px] font-bold">OpenXdrive Administration</h2>
             <p className="mt-2 text-[13px] text-slate-500 dark:text-slate-400">
               Application deployments and MySQL backups are managed outside the user dashboard.
