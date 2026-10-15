@@ -33,12 +33,12 @@ Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for detai
 
 ## Production administration and data safety
 
-Configure `SYSTEM_ADMIN_EMAIL` on the backend to the email of an existing
+Configure `SYSTEM_ADMIN_USER_ID` on the backend to the database user ID of your existing
 OpenXdrive account before using the global Google OAuth configuration panel.
 The setting is optional, but admin-only operations stay inaccessible without it.
 
 ```dotenv
-SYSTEM_ADMIN_EMAIL=owner@example.com
+SYSTEM_ADMIN_USER_ID=<your-account-uuid>
 ```
 
 The browser does not run server-side Git commands or perform SQLite database

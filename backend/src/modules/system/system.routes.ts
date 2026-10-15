@@ -7,18 +7,19 @@ import { decryptText, encryptText } from '../../utils/crypto.js'
 export const systemRouter = Router()
 
 // System administration is intentionally disabled until an owner configures an
-// administrator email. Any normal registered user must not be able to replace
+// administrator account ID. Any normal registered user must not be able to replace
 // global OAuth credentials or run server-level operations.
 systemRouter.use(requireAuth)
 
 async function isSystemAdmin(req: AuthRequest) {
-  const configuredEmail = env.SYSTEM_ADMIN_EMAIL?.trim().toLowerCase()
-  if (!configuredEmail || !req.user) return false
+  // Stable authenticated database IDs prevent unverified email-account claiming.
+  const configuredId = env.SYSTEM_ADMIN_USER_ID?.trim()
+  if (!configuredId || !req.user || req.user.id !== configuredId) return false
   const user = await prisma.user.findUnique({
     where: { id: req.user.id },
-    select: { email: true, status: true },
+    select: { status: true },
   })
-  return user?.status === 'active' && user.email.trim().toLowerCase() === configuredEmail
+  return user?.status === 'active'
 }
 
 async function requireSystemAdmin(req: AuthRequest, res: Response, next: NextFunction) {
