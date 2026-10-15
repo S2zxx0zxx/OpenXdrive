@@ -39,24 +39,24 @@ export const folders: FolderItem[] = [
 
 export const files: FileItem[] = [
   { name: 'Dribbble Design File', date: 'May 5, 2026, 10:04 PM', size: '381.72 KB', access: 'Only You', kind: 'doc', shared: 1, openedDate: 'Today, 09:42 AM', starredDate: 'Apr 30, 2026', location: 'All Files' },
-  { name: 'Travel Landing Page', date: '--', size: '381.72 KB', access: '3 Members', kind: 'image', shared: 3, owner: 'Maya Putri', openedDate: 'Yesterday, 07:12 PM', location: 'Shared With Me' },
+  { name: 'Travel Landing Page', date: '--', size: '381.72 KB', access: '3 Members', kind: 'image', shared: 3, owner: 'Workspace Member', openedDate: 'Yesterday, 07:12 PM', location: 'Shared With Me' },
   { name: 'Wedding Video', date: 'May 5, 2026, 10:04 PM', size: '381.72 KB', access: 'Only You', kind: 'video', shared: 1, openedDate: 'May 7, 2026', location: 'Videos' },
   { name: 'Projects Brief', date: '--', size: '25.72 KB', access: 'Only You', kind: 'doc', shared: 1, starredDate: 'May 2, 2026', location: 'Projects' },
-  { name: 'Resume Of Tushar Chowdhury.Pdf', date: 'May 5, 2026, 10:04 PM', size: '381.72 KB', access: 'Only You', kind: 'pdf', shared: 1, starredDate: 'May 3, 2026', location: 'Documents' },
+  { name: 'Example Resume.pdf', date: 'May 5, 2026, 10:04 PM', size: '381.72 KB', access: 'Only You', kind: 'pdf', shared: 1, starredDate: 'May 3, 2026', location: 'Documents' },
   { name: 'Travel Video 2021', date: '--', size: '381.72 KB', access: 'Only You', kind: 'video', shared: 1, archivedDate: 'Apr 19, 2026', location: 'Videos' },
 ]
 
 export const sharedFiles: FileItem[] = [
-  { name: 'Client References', date: 'May 8, 2026', size: '2.4 MB', access: '5 Members', kind: 'doc', shared: 5, owner: 'Maya Putri' },
-  { name: 'Team Contracts', date: 'May 7, 2026', size: '948 KB', access: '4 Members', kind: 'pdf', shared: 4, owner: 'Arif Rahman' },
-  { name: 'Design Feedback', date: 'May 6, 2026', size: '1.1 MB', access: '3 Members', kind: 'image', shared: 3, owner: 'Lena Hartono' },
-  { name: 'Product Walkthrough', date: 'May 4, 2026', size: '14.8 MB', access: '6 Members', kind: 'video', shared: 6, owner: 'Rizky Adam' },
+  { name: 'Client References', date: 'May 8, 2026', size: '2.4 MB', access: '5 Members', kind: 'doc', shared: 5, owner: 'Workspace Member' },
+  { name: 'Team Contracts', date: 'May 7, 2026', size: '948 KB', access: '4 Members', kind: 'pdf', shared: 4, owner: 'Workspace Member' },
+  { name: 'Design Feedback', date: 'May 6, 2026', size: '1.1 MB', access: '3 Members', kind: 'image', shared: 3, owner: 'Workspace Member' },
+  { name: 'Product Walkthrough', date: 'May 4, 2026', size: '14.8 MB', access: '6 Members', kind: 'video', shared: 6, owner: 'Workspace Member' },
 ]
 
 export const archivedFiles: FileItem[] = [
   { name: 'Travel Video 2021', date: '--', size: '381.72 KB', access: 'Only You', kind: 'video', shared: 1, archivedDate: 'Apr 19, 2026', location: 'Videos' },
   { name: 'Q1 Expense Draft', date: 'Mar 12, 2026', size: '85.1 KB', access: 'Only You', kind: 'doc', shared: 1, archivedDate: 'Apr 11, 2026', location: 'Finance' },
-  { name: 'Old Brand Snapshot', date: 'Feb 28, 2026', size: '2.1 MB', access: 'Only You', kind: 'image', shared: 1, archivedDate: 'Mar 29, 2026', location: 'Brand Materials' },
+  { name: 'Archived Design Snapshot', date: 'Feb 28, 2026', size: '2.1 MB', access: 'Only You', kind: 'image', shared: 1, archivedDate: 'Mar 29, 2026', location: 'Brand Materials' },
 ]
 
 export const sharedFolders: FolderItem[] = [

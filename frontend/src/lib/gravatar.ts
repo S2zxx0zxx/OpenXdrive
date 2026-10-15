@@ -1,45 +1,16 @@
-// Generates a fun, unique avatar URL for a user based on their email.
-// Uses DiceBear "bottts" style (cute robots) as the default when no Gravatar is set.
-// Falls back to a random avatar when no email is provided.
-export async function getGravatarUrl(email: string | undefined, size: number) {
-  const normalized = email?.trim().toLowerCase()
-
-  // Hash the email for Gravatar lookup + as DiceBear seed
-  const seed = normalized ?? 'default-user'
-  let hash = ''
-
-  if (typeof crypto !== 'undefined' && crypto.subtle) {
-    try {
-      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(seed))
-      hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
-    } catch {
-      hash = simpleHash(seed)
-    }
-  } else {
-    hash = simpleHash(seed)
+// Create a deterministic, locally rendered OpenXdrive avatar. This avoids
+// revealing email hashes and page visits to remote avatar providers.
+export async function getGravatarUrl(email: string | undefined, size: number): Promise<string> {
+  const normalized = email?.trim().toLowerCase() || 'user'
+  const namePart = normalized.split('@')[0]
+  const initials = (namePart.match(/[a-z0-9]/g) ?? ['U']).slice(0, 2).join('').toUpperCase()
+  let hash = 2166136261
+  for (let i = 0; i < normalized.length; i++) {
+    hash = Math.imul(hash ^ normalized.charCodeAt(i), 16777619) >>> 0
   }
-
-  // Try Gravatar first; fallback to DiceBear bottts (cute robots)
-  // d=404 means Gravatar returns 404 if no image → we catch and fall through to DiceBear
-  if (normalized && hash.length === 64) {
-    const gravatarUrl = `https://www.gravatar.com/avatar/${hash}?s=${size}&d=404`
-    try {
-      const res = await fetch(gravatarUrl, { method: 'HEAD' })
-      if (res.ok) return gravatarUrl
-    } catch {
-      // Network error → fall through
-    }
-  }
-
-  // DiceBear bottts — cute, colorful robot avatars
-  return `https://api.dicebear.com/8.x/bottts/svg?seed=${encodeURIComponent(hash)}&size=${size}&backgroundColor=b6e3f4,c0aede,d1f4cc,ffdfbf,ffd5dc`
-}
-
-function simpleHash(str: string): string {
-  let hash = 0
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash << 5) - hash + str.charCodeAt(i)
-    hash |= 0 // Convert to 32bit integer
-  }
-  return Math.abs(hash).toString(36)
+  const palette = ['#2563eb', '#4f46e5', '#0891b2', '#0f766e', '#7c3aed', '#be185d']
+  const background = palette[hash % palette.length]
+  const safeSize = Math.max(32, Math.min(256, Math.floor(size) || 64))
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="${safeSize}" height="${safeSize}" role="img" aria-label="OpenXdrive avatar"><rect width="100" height="100" rx="24" fill="${background}"/><text x="50" y="55" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-size="37" font-weight="700" font-family="system-ui,sans-serif">${initials}</text></svg>`
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
 }
