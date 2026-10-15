@@ -85,14 +85,14 @@ password: empty
 The easiest way to prepare the project is using the automated setup script. It generates local environment files with secure keys, installs dependencies, and generates the Prisma client. MySQL 8+ must already be running for local development; Docker setup includes MySQL.
 
 ### Windows (PowerShell)
-Make sure to open PowerShell and navigate to the project directory first. For example, if you cloned the project to `E:\AUTO KLIK\OpenXdrive`:
+Make sure to open PowerShell and navigate to the project directory first. For example, if you cloned the project to `C:\Projects\OpenXdrive`:
 
 ```powershell
 # 1. Switch to the drive where the project is located (if necessary)
 E:
 
 # 2. Navigate to the project folder
-cd "E:\AUTO KLIK\OpenXdrive"
+cd "C:\Projects\OpenXdrive"
 
 # 3. Run the automated setup script
 powershell -ExecutionPolicy Bypass -File .\setup.ps1
