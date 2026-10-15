@@ -1,0 +1,39 @@
+name: OpenXdrive verification
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  brand-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify no legacy brand paths or content remain
+        shell: bash
+        run: |
+          if git ls-files | grep -iE '9[ _-]*drive'; then
+            echo 'Legacy brand remains in a tracked path'
+            exit 1
+          fi
+          if git grep -n -iE '9[ _-]*drive' -- .; then
+            echo 'Legacy brand remains in tracked file contents'
+            exit 1
+          fi
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+      - name: Generate Prisma client
+        working-directory: backend
+        run: npx prisma generate
+      - name: Build backend
+        working-directory: backend
+        run: npm run build
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
