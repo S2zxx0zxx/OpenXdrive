@@ -1,12 +1,12 @@
-import { useEffect, useState, useRef, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Bell, Cloud, Database, Globe, HardDrive, Link2, RefreshCw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { DummyModal } from '@/components/drive/DummyModal'
 import { PageHeader } from '@/components/drive/PageHeader'
-import { apiFetch, formatBytes, API_URL } from '@/lib/api'
-import { getGravatarUrl } from '@/lib/gravatar'
-import { getStoredUser, getAccessToken, clearAuthSession } from '@/lib/auth'
+import { apiFetch, formatBytes } from '@/lib/api'
+import { getLocalAvatarUrl } from '@/lib/avatar'
+import { getStoredUser } from '@/lib/auth'
 
 type ConnectedAccount = { id: string; provider: string; email: string; displayName?: string | null; status: string; storageAccount?: { totalBytes: string | null; usedBytes: string; availableBytes: string | null; lastSyncedAt: string | null } | null }
 
@@ -39,10 +39,6 @@ export function SettingsPage() {
   const [profileImageUrl, setProfileImageUrl] = useState('')
   const [avatarError, setAvatarError] = useState(false)
   const [selectedAccountId, setSelectedAccountId] = useState('')
-  const [updatingSystem, setUpdatingSystem] = useState(false)
-  const [updateModalOpen, setUpdateModalOpen] = useState(false)
-  const [updateModalTitle, setUpdateModalTitle] = useState('')
-
   // Google OAuth Config states
   const [googleClientId, setGoogleClientId] = useState('')
   const [googleClientSecret, setGoogleClientSecret] = useState('')
@@ -51,166 +47,7 @@ export function SettingsPage() {
   const [hasSecret, setHasSecret] = useState(false)
   const [savingGoogleConfig, setSavingGoogleConfig] = useState(false)
   const [showGoogleHelp, setShowGoogleHelp] = useState(false)
-
-  // Live log polling states
-  const [isPollingLog, setIsPollingLog] = useState(false)
-  const [updateLog, setUpdateLog] = useState('')
-  const [updateFinished, setUpdateFinished] = useState(false)
-  const [updateSuccess, setUpdateSuccess] = useState<boolean | null>(null)
-  const [reconnectCount, setReconnectCount] = useState(0)
-  const logContainerRef = useRef<HTMLDivElement>(null)
-
-  // Backup & Restore states
-  const [downloadingBackup, setDownloadingBackup] = useState(false)
-  const [restoringBackup, setRestoringBackup] = useState(false)
-  const [restoreFile, setRestoreFile] = useState<File | null>(null)
-  const [restoreMessage, setRestoreMessage] = useState('')
-  const [restoreSuccess, setRestoreSuccess] = useState(false)
-
-  async function downloadBackup() {
-    setDownloadingBackup(true)
-    try {
-      const token = getAccessToken()
-      const response = await fetch(`${API_URL}/system/backup`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
-      if (!response.ok) {
-        throw new Error('Failed to retrieve database backup.')
-      }
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'OpenXdrive-backup.db'
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      window.URL.revokeObjectURL(url)
-    } catch (err: any) {
-      alert('Failed to download backup: ' + err.message)
-    } finally {
-      setDownloadingBackup(false)
-    }
-  }
-
-  function handleRestoreFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    if (e.target.files && e.target.files.length > 0) {
-      setRestoreFile(e.target.files[0])
-    } else {
-      setRestoreFile(null)
-    }
-  }
-
-  async function restoreBackup() {
-    if (!restoreFile) return
-    if (!confirm('WARNING: Restoring database will overwrite all your current configurations, connected accounts, virtual folders, and user accounts. The server will restart. Are you sure you want to proceed?')) {
-      return
-    }
-
-    setRestoringBackup(true)
-    setRestoreMessage('')
-    setRestoreSuccess(false)
-
-    try {
-      const token = getAccessToken()
-      const formData = new FormData()
-      formData.append('file', restoreFile)
-
-      const response = await fetch(`${API_URL}/system/restore`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      })
-
-      const data = await response.json()
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to restore database.')
-      }
-
-      setRestoreSuccess(true)
-      setRestoreMessage(data.message || 'Database restored successfully! Logging you out and reloading...')
-
-      setTimeout(() => {
-        clearAuthSession()
-        window.location.href = '/login'
-      }, 4000)
-
-    } catch (err: any) {
-      setRestoreSuccess(false)
-      setRestoreMessage(err.message || 'Failed to restore database.')
-    } finally {
-      setRestoringBackup(false)
-    }
-  }
-
-  useEffect(() => {
-    if (!isPollingLog) return
-
-    let intervalId: any
-    let active = true
-
-    async function fetchLog() {
-      try {
-        const data = await apiFetch<{ log: string }>('/system/update-log')
-        if (!active) return
-
-        setUpdateLog(data.log)
-        setReconnectCount(0)
-
-        if (data.log.includes('=== System Update Completed:')) {
-          setUpdateFinished(true)
-          setUpdateSuccess(true)
-          setIsPollingLog(false)
-          setUpdateModalTitle('System Updated')
-        }
-      } catch (err) {
-        if (!active) return
-        setReconnectCount((prev) => prev + 1)
-      }
-    }
-
-    fetchLog()
-    intervalId = setInterval(fetchLog, 2000)
-
-    return () => {
-      active = false
-      clearInterval(intervalId)
-    }
-  }, [isPollingLog])
-
-  useEffect(() => {
-    if (logContainerRef.current) {
-      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight
-    }
-  }, [updateLog])
-
-  async function runSystemUpdate() {
-    setUpdatingSystem(true)
-    setMessage('')
-    setUpdateLog('Initiating system update in the background...\n')
-    setUpdateFinished(false)
-    setUpdateSuccess(null)
-    setReconnectCount(0)
-    setUpdateModalTitle('System Updating')
-    setUpdateModalOpen(true)
-
-    try {
-      await apiFetch<{ message: string }>('/system/update', { method: 'POST' })
-      setIsPollingLog(true)
-    } catch (error) {
-      setUpdateModalTitle('System Update Failed')
-      const errMsg = error instanceof Error ? error.message : 'System update failed to initiate.'
-      setUpdateLog((prev) => prev + `\nError: ${errMsg}`)
-      setUpdateFinished(true)
-      setUpdateSuccess(false)
-    } finally {
-      setUpdatingSystem(false)
-    }
-  }
+  const [isSystemAdmin, setIsSystemAdmin] = useState(false)
 
   async function saveGoogleConfig(event: FormEvent) {
     event.preventDefault()
@@ -240,8 +77,9 @@ export function SettingsPage() {
   async function load() {
     const data = await apiFetch<{ accounts: ConnectedAccount[] }>('/connected-accounts')
     setAccounts(data.accounts)
-
-    try {
+    const permissions = await apiFetch<{ isSystemAdmin: boolean }>('/system/permissions')
+    setIsSystemAdmin(permissions.isSystemAdmin)
+    if (permissions.isSystemAdmin) {
       const configData = await apiFetch<{ exists: boolean; clientId: string; redirectUri: string; hasSecret: boolean; defaultRedirectUri: string }>('/system/google-config')
       if (configData.exists) {
         setGoogleClientId(configData.clientId || '')
@@ -249,8 +87,6 @@ export function SettingsPage() {
         setHasSecret(configData.hasSecret || false)
       }
       setDefaultRedirectUri(configData.defaultRedirectUri || '')
-    } catch (e) {
-      console.error('Failed to load global Google config', e)
     }
   }
 
@@ -260,7 +96,7 @@ export function SettingsPage() {
 
   useEffect(() => {
     setAvatarError(false)
-    getGravatarUrl(user?.email, 96).then(setProfileImageUrl).catch(() => setProfileImageUrl(''))
+    getLocalAvatarUrl(user?.email, 96).then(setProfileImageUrl).catch(() => setProfileImageUrl(''))
   }, [user?.email])
 
   useEffect(() => {
@@ -415,6 +251,7 @@ export function SettingsPage() {
             </div>
           </Card>
 
+          {isSystemAdmin && (
           <Card className="p-4">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
               <div className="flex items-center gap-2.5">
@@ -491,116 +328,19 @@ export function SettingsPage() {
               </div>
             </form>
           </Card>
-
-          <Card className="overflow-hidden p-3.5">
-            <div className="flex flex-col gap-3.5 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="flex items-center gap-2.5">
-                  <RefreshCw className="h-5 w-5 text-blue-600" />
-                  <h2 className="text-[16px] font-bold">System Update</h2>
-                </div>
-                <p className="mt-1 text-[13px] text-slate-500">
-                  Pull the latest code from GitHub. Dev servers will automatically restart.
-                </p>
-              </div>
-              <Button
-                className="w-full sm:w-32"
-                variant="outline"
-                size="sm"
-                onClick={runSystemUpdate}
-                disabled={updatingSystem}
-              >
-                <RefreshCw className={updatingSystem ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
-                {updatingSystem ? 'Updating...' : 'Update Code'}
-              </Button>
-            </div>
-          </Card>
-
-          <Card className="overflow-hidden p-3.5">
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                <div className="flex items-center gap-2.5">
-                  <Database className="h-5 w-5 text-blue-600" />
-                  <h2 className="text-[16px] font-bold">Backup & Restore Database</h2>
-                </div>
-                <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">SQLite Local Database</span>
-              </div>
-
-              <div className="grid gap-5 sm:grid-cols-2">
-                {/* Download Backup Section (Translucent Green Glass) */}
-                <div className="rounded-2xl bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 dark:border-emerald-500/30 hover:border-emerald-500/40 hover:bg-emerald-500/10 transition-all duration-300 p-5 flex flex-col justify-between shadow-sm relative overflow-hidden group">
-                  <div className="flex items-start gap-4">
-                    <div className="h-10 w-10 shrink-0 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                      <HardDrive className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Download Database Backup</h3>
-                      <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400 leading-normal">
-                        Save a copy of your active database containing accounts, virtual folders, file metadata, and configurations.
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    className="mt-5 w-full h-11 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold shadow-md shadow-emerald-500/10 hover:shadow-emerald-500/20 border-0 transition-all duration-300 transform active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2 cursor-pointer"
-                    onClick={downloadBackup}
-                    disabled={downloadingBackup}
-                    style={{ color: '#ffffff' }}
-                  >
-                    <HardDrive className="h-4 w-4" style={{ color: '#ffffff' }} />
-                    <span style={{ color: '#ffffff' }}>{downloadingBackup ? 'Downloading...' : 'Download Backup'}</span>
-                  </button>
-                </div>
-
-                {/* Restore Backup Section (Translucent Orange Glass) */}
-                <div className="rounded-2xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 dark:border-amber-500/30 hover:border-amber-500/40 hover:bg-amber-500/10 transition-all duration-300 p-5 flex flex-col justify-between shadow-sm relative overflow-hidden group">
-                  <div className="flex items-start gap-4">
-                    <div className="h-10 w-10 shrink-0 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                      <RefreshCw className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Restore Database Backup</h3>
-                      <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400 leading-normal">
-                        Upload a previously downloaded OpenXdrive backup file to replace the active database.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 grid gap-3">
-                    <input
-                      type="file"
-                      accept=".db"
-                      onChange={handleRestoreFileChange}
-                      className="block w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-extrabold file:bg-amber-500/15 file:text-amber-700 dark:file:text-amber-300 hover:file:bg-amber-500/20 cursor-pointer border border-amber-500/20 dark:border-amber-500/30 rounded-xl p-1 bg-amber-500/5"
-                    />
-                    {restoreFile ? (
-                      <button
-                        className="w-full h-11 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-bold shadow-md shadow-amber-500/10 hover:shadow-amber-500/20 border-0 transition-all duration-300 transform active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2 cursor-pointer"
-                        onClick={restoreBackup}
-                        disabled={restoringBackup}
-                        style={{ color: '#ffffff' }}
-                      >
-                        <RefreshCw className={restoringBackup ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} style={{ color: '#ffffff' }} />
-                        <span style={{ color: '#ffffff' }}>{restoringBackup ? 'Restoring & Restarting...' : 'Restore Backup'}</span>
-                      </button>
-                    ) : (
-                      <button
-                        className="w-full h-11 rounded-xl bg-slate-100 dark:bg-slate-800/50 text-slate-400 dark:text-slate-600 border border-slate-200/50 dark:border-slate-800/50 cursor-not-allowed flex items-center justify-center gap-2"
-                        disabled
-                      >
-                        <RefreshCw className="h-4 w-4 text-slate-400 dark:text-slate-600" />
-                        <span>Restore Backup</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {restoreMessage && (
-                <p className={restoreSuccess ? "rounded-xl bg-emerald-50 p-3 text-xs font-semibold mt-1 text-emerald-700" : "rounded-xl bg-red-50 p-3 text-xs font-semibold mt-1 text-red-700"}>
-                  {restoreMessage}
-                </p>
-              )}
-            </div>
+          )}
+          <Card className="overflow-hidden p-4">
+            <h2 className="text-[16px] font-bold">OpenXdrive Administration</h2>
+            <p className="mt-2 text-[13px] text-slate-500 dark:text-slate-400">
+              Application deployments and MySQL backups are managed outside the user dashboard.
+              Use your GitHub deployment pipeline or hosting control panel for releases,
+              and database-native tools for verified backups and restores.
+            </p>
+            {!isSystemAdmin && (
+              <p className="mt-2 text-xs text-slate-500">
+                Global OAuth credentials are available only to a configured system administrator.
+              </p>
+            )}
           </Card>
         </div>
         <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1 lg:gap-3">
@@ -635,69 +375,7 @@ export function SettingsPage() {
         </div>
       </DummyModal>
 
-      <DummyModal
-        open={updateModalOpen}
-        title={updateModalTitle}
-        description={
-          updateFinished
-            ? (updateSuccess ? 'System updated successfully' : 'Update failed')
-            : 'Live installation logs'
-        }
-        className="max-w-2xl"
-        onClose={() => {
-          if (!updateFinished) {
-            if (!confirm('The update is still running in the background. Close log viewer?')) {
-              return
-            }
-          }
-          setUpdateModalOpen(false)
-          setIsPollingLog(false)
-          if (updateFinished && updateSuccess) {
-            window.location.reload()
-          }
-        }}
-      >
-        <div className="grid gap-4">
-          <div
-            ref={logContainerRef}
-            className="relative rounded-xl bg-slate-950 p-4 font-mono text-xs text-slate-300 leading-relaxed border border-slate-800 h-80 overflow-y-auto select-text"
-          >
-            <pre className="whitespace-pre-wrap">{updateLog}</pre>
-            {!updateFinished && (
-              <div className="mt-3 flex items-center gap-2 text-blue-400">
-                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                <span>
-                  {reconnectCount > 0
-                    ? `Rebooting server and reconnecting... (attempt ${reconnectCount})`
-                    : 'Installing updates...'}
-                </span>
-              </div>
-            )}
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                if (!updateFinished) {
-                  if (!confirm('The update is still running. Close log viewer?')) return
-                }
-                setUpdateModalOpen(false)
-                setIsPollingLog(false)
-                if (updateFinished && updateSuccess) {
-                  window.location.reload()
-                }
-              }}
-            >
-              Close
-            </Button>
-            {updateFinished && updateSuccess && (
-              <Button onClick={() => window.location.reload()}>
-                Reload Page
-              </Button>
-            )}
-          </div>
-        </div>
-      </DummyModal>
+
     </>
   )
 }

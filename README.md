@@ -31,6 +31,30 @@ Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for detai
 - Express + TypeScript backend.
 - React + Vite frontend.
 
+## Production administration and data safety
+
+Configure `SYSTEM_ADMIN_USER_ID` on the backend to the database user ID of your existing
+OpenXdrive account before using the global Google OAuth configuration panel.
+The setting is optional, but admin-only operations stay inaccessible without it.
+
+```dotenv
+SYSTEM_ADMIN_USER_ID=<your-account-uuid>
+```
+
+The browser does not run server-side Git commands or perform SQLite database
+replacement. Deploy trusted releases using GitHub Actions and your hosting
+platform, and back up the MySQL database using database-native tooling.
+
+An existing installation may have saved data in its dedicated storage folder.
+Before syncing after an upgrade, rename that existing Google Drive folder to
+`OpenXdrive` without deleting its contents, and retain a verified database
+backup. Existing S3 object prefixes and saved database records are deliberately
+left unchanged to avoid broken object paths.
+
+Third-party software and libraries retain their respective licenses and
+copyright requirements. Rebranding a product is not a transfer of underlying
+copyright ownership. See [LICENSE](LICENSE).
+
 ## Project Structure
 
 ```txt
@@ -61,14 +85,14 @@ password: empty
 The easiest way to prepare the project is using the automated setup script. It generates local environment files with secure keys, installs dependencies, and generates the Prisma client. MySQL 8+ must already be running for local development; Docker setup includes MySQL.
 
 ### Windows (PowerShell)
-Make sure to open PowerShell and navigate to the project directory first. For example, if you cloned the project to `E:\AUTO KLIK\OpenXdrive`:
+Make sure to open PowerShell and navigate to the project directory first. For example, if you cloned the project to `C:\Projects\OpenXdrive`:
 
 ```powershell
 # 1. Switch to the drive where the project is located (if necessary)
 E:
 
 # 2. Navigate to the project folder
-cd "E:\AUTO KLIK\OpenXdrive"
+cd "C:\Projects\OpenXdrive"
 
 # 3. Run the automated setup script
 powershell -ExecutionPolicy Bypass -File .\setup.ps1
@@ -502,9 +526,9 @@ Copy the example environment file to `.env`:
 cp .env.docker.example .env
 ```
 Edit the `.env` file (e.g., `nano .env`) and configure the values for your production VPS domain/IP:
-* **`FRONTEND_URL`**: Set to your public domain or VPS IP (e.g., `http://103.xxx.xxx.xxx:5173` or `https://openxdrive.example.com`).
-* **`VITE_API_URL`**: Set to your public backend URL (e.g., `http://103.xxx.xxx.xxx:4000` or `https://api.openxdrive.example.com`).
-* **`GOOGLE_REDIRECT_URI`**: Set to your public redirect callback URL (e.g., `http://103.xxx.xxx.xxx:4000/connected-accounts/google/callback`).
+* **`FRONTEND_URL`**: Set to your public domain or VPS IP (e.g., `http://your-vps-ip:5173` or `https://openxdrive.example.com`).
+* **`VITE_API_URL`**: Set to your public backend URL (e.g., `http://your-vps-ip:4000` or `https://api.openxdrive.example.com`).
+* **`GOOGLE_REDIRECT_URI`**: Set to your public redirect callback URL (e.g., `http://your-vps-ip:4000/connected-accounts/google/callback`).
 * Set secure credentials for **`JWT_ACCESS_SECRET`** and **`TOKEN_ENCRYPTION_KEY`** (encryption key must be exactly 32 characters/bytes).
 * Add your **`GOOGLE_CLIENT_ID`** and **`GOOGLE_CLIENT_SECRET`**.
 

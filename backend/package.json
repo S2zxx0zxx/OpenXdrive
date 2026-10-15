@@ -1,5 +1,5 @@
 {
-  "name": "backend",
+  "name": "openxdrive-backend",
   "version": "1.0.0",
   "main": "dist/server.js",
   "scripts": {
@@ -15,10 +15,8 @@
     "test:s3": "tsx src/scripts/test-s3-connection.ts",
     "test:api-upload": "tsx src/scripts/test-api-upload.ts"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "license": "Apache-2.0",
+  "description": "OpenXdrive storage gateway API",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.954.0",
     "@aws-sdk/lib-storage": "^3.954.0",
@@ -44,5 +42,6 @@
     "@types/node": "^25.9.1",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
-  }
+  },
+  "private": true
 }
