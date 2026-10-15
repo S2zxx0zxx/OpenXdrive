@@ -1,106 +1,46 @@
-import { Router } from 'express'
-import { exec, spawn } from 'child_process'
-import path from 'path'
-import fs from 'fs'
-import { requireAuth } from '../../middleware/auth.middleware.js'
+import { Router, type NextFunction, type Response } from 'express'
+import { requireAuth, type AuthRequest } from '../../middleware/auth.middleware.js'
 import { prisma } from '../../config/prisma.js'
+import { env } from '../../config/env.js'
 import { decryptText, encryptText } from '../../utils/crypto.js'
-import Busboy from 'busboy'
 
 export const systemRouter = Router()
 
+// System administration is intentionally disabled until an owner configures an
+// administrator email. Any normal registered user must not be able to replace
+// global OAuth credentials or run server-level operations.
+systemRouter.use(requireAuth)
 
-systemRouter.post('/update', requireAuth, (req, res, next) => {
-  const projectRoot = path.resolve(process.cwd(), '..')
-  const updateScript = path.join(projectRoot, 'update.sh')
-
-  // Check if git is installed
-  exec('git --version', (gitError) => {
-    if (gitError) {
-      return res.status(400).json({
-        code: 'GIT_NOT_FOUND',
-        message: 'Git is not installed inside the app container. Since you are running OpenXdrive in Docker, please update by running:\n\n1. ssh root@your-vps-ip\n2. cd OpenXdrive\n3. git pull\n4. docker-compose down && docker-compose up -d --build\n\ndirectly in your VPS host terminal.'
-      })
-    }
-
-    if (fs.existsSync(updateScript)) {
-      try {
-        // Clear old update log to prevent race conditions on frontend polling
-        const logFile = path.join(projectRoot, 'update.log')
-        fs.writeFileSync(logFile, 'Initiating update...\n')
-
-        const child = spawn('bash', ['update.sh'], {
-          cwd: projectRoot,
-          detached: true,
-          stdio: 'ignore'
-        })
-        child.unref()
-
-        return res.json({
-          status: 'success',
-          message: 'System update initiated. Rebuilding and restarting backend & frontend in the background. Please wait ~1 minute and refresh the page.'
-        })
-      } catch (err: any) {
-        return res.status(500).json({
-          code: 'UPDATE_FAILED',
-          message: 'Failed to start update script.',
-          error: err.message
-        })
-      }
-    } else {
-      // Fallback to simple git pull if update.sh doesn't exist
-      exec('git pull', { cwd: projectRoot }, (error, stdout, stderr) => {
-        if (error) {
-          console.error('System update failed:', error)
-          return res.status(500).json({
-            code: 'UPDATE_FAILED',
-            message: 'Failed to run git pull. Make sure git is installed and configured.',
-            error: error.message,
-            stderr
-          })
-        }
-
-        console.log('System update stdout:', stdout)
-        if (stderr) {
-          console.warn('System update stderr:', stderr)
-        }
-
-        return res.json({
-          status: 'success',
-          message: 'System code updated successfully. Dev servers will auto-restart.',
-          stdout,
-          stderr
-        })
-      })
-    }
+async function isSystemAdmin(req: AuthRequest) {
+  const configuredEmail = env.SYSTEM_ADMIN_EMAIL?.trim().toLowerCase()
+  if (!configuredEmail || !req.user) return false
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: { email: true, status: true },
   })
-})
+  return user?.status === 'active' && user.email.trim().toLowerCase() === configuredEmail
+}
 
-systemRouter.get('/update-log', requireAuth, (req, res) => {
-  const projectRoot = path.resolve(process.cwd(), '..')
-  const logFile = path.join(projectRoot, 'update.log')
-
-  if (!fs.existsSync(logFile)) {
-    return res.json({
-      log: 'No update history found.'
-    })
-  }
-
+async function requireSystemAdmin(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const logContent = fs.readFileSync(logFile, 'utf8')
-    return res.json({
-      log: logContent
-    })
-  } catch (error: any) {
-    return res.status(500).json({
-      code: 'READ_LOG_FAILED',
-      message: 'Failed to read update log file.',
-      error: error.message
-    })
+    if (!(await isSystemAdmin(req))) {
+      return res.status(403).json({ code: 'SYSTEM_ADMIN_REQUIRED', message: 'System administrator access required.' })
+    }
+    return next()
+  } catch (error) {
+    return next(error)
+  }
+}
+
+systemRouter.get('/permissions', async (req: AuthRequest, res, next) => {
+  try {
+    return res.json({ isSystemAdmin: await isSystemAdmin(req) })
+  } catch (error) {
+    return next(error)
   }
 })
 
-systemRouter.get('/google-config', requireAuth, async (req, res, next) => {
+systemRouter.get('/google-config', requireSystemAdmin, async (req, res, next) => {
   try {
     const config = await prisma.providerConfig.findFirst({
       where: { userId: null, provider: 'google_drive', status: 'active' },
@@ -135,7 +75,7 @@ systemRouter.get('/google-config', requireAuth, async (req, res, next) => {
   }
 })
 
-systemRouter.post('/google-config', requireAuth, async (req, res, next) => {
+systemRouter.post('/google-config', requireSystemAdmin, async (req, res, next) => {
   try {
     const { clientId, clientSecret, redirectUri } = req.body
 
@@ -151,12 +91,6 @@ systemRouter.post('/google-config', requireAuth, async (req, res, next) => {
       'https://www.googleapis.com/auth/userinfo.email',
       'https://www.googleapis.com/auth/userinfo.profile',
     ]
-
-    // Disable old global active config
-    await prisma.providerConfig.updateMany({
-      where: { userId: null, provider: 'google_drive', status: 'active' },
-      data: { status: 'disabled' }
-    })
 
     // Retrieve the old config to see if we need to reuse the secret if it was not provided in the request
     let finalSecret = clientSecret
@@ -177,6 +111,12 @@ systemRouter.post('/google-config', requireAuth, async (req, res, next) => {
     if (!finalSecret) {
       return res.status(400).json({ code: 'BAD_REQUEST', message: 'Client Secret is required for first-time setup.' })
     }
+
+    // Only disable an active configuration after validating replacement credentials.
+    await prisma.providerConfig.updateMany({
+      where: { userId: null, provider: 'google_drive', status: 'active' },
+      data: { status: 'disabled' }
+    })
 
     const config = await prisma.providerConfig.create({
       data: {
@@ -200,121 +140,18 @@ systemRouter.post('/google-config', requireAuth, async (req, res, next) => {
   }
 })
 
-systemRouter.get('/backup', requireAuth, (req, res, next) => {
-  try {
-    const dbPath = getDatabaseFilePath()
-    if (!fs.existsSync(dbPath)) {
-      return res.status(404).json({ code: 'NOT_FOUND', message: 'Database file not found.' })
-    }
-    res.setHeader('Content-Disposition', 'attachment; filename=OpenXdrive-backup.db')
-    res.setHeader('Content-Type', 'application/octet-stream')
-    const fileStream = fs.createReadStream(dbPath)
-    fileStream.pipe(res)
-  } catch (error) {
-    return next(error)
-  }
-})
 
-systemRouter.post('/restore', requireAuth, (req, res, next) => {
-  try {
-    const contentType = req.headers['content-type']
-    if (!contentType?.includes('multipart/form-data')) {
-      return res.status(400).json({ code: 'BAD_REQUEST', message: 'multipart/form-data required.' })
-    }
-
-    const busboy = Busboy({ headers: req.headers, limits: { files: 1 } })
-    let fileReceived = false
-
-    busboy.on('file', (name, fileStream, info) => {
-      fileReceived = true
-      const dbPath = getDatabaseFilePath()
-      const tempDbPath = dbPath + '.tmp'
-      const writeStream = fs.createWriteStream(tempDbPath)
-
-      fileStream.pipe(writeStream)
-
-      writeStream.on('finish', async () => {
-        try {
-          // Disconnect prisma client first to release database lock
-          await prisma.$disconnect()
-
-          // Replace old database file with restored database file
-          fs.renameSync(tempDbPath, dbPath)
-
-          res.json({
-            status: 'success',
-            message: 'Database restored successfully. Server will restart in 2 seconds.'
-          })
-
-          // Graceful exit after response is sent
-          setTimeout(() => {
-            console.log('Database restored. Exiting to allow PM2 restart.')
-            process.exit(0)
-          }, 2000)
-
-        } catch (err: any) {
-          if (fs.existsSync(tempDbPath)) {
-            try { fs.unlinkSync(tempDbPath) } catch {}
-          }
-          console.error('Failed to restore database:', err)
-          return res.status(500).json({
-            code: 'RESTORE_FAILED',
-            message: 'Failed to restore database.',
-            error: err.message
-          })
-        }
-      })
-
-      writeStream.on('error', (err) => {
-        if (fs.existsSync(tempDbPath)) {
-          try { fs.unlinkSync(tempDbPath) } catch {}
-        }
-        console.error('Write error on temp DB:', err)
-        return res.status(500).json({
-          code: 'WRITE_ERROR',
-          message: 'Failed to write temporary database file.',
-          error: err.message
-        })
-      })
-    })
-
-    busboy.on('error', (err) => {
-      console.error('Busboy error:', err)
-      if (!res.headersSent) {
-        next(err)
-      }
-    })
-
-    busboy.on('finish', () => {
-      if (!fileReceived && !res.headersSent) {
-        return res.status(400).json({ code: 'BAD_REQUEST', message: 'No file uploaded.' })
-      }
-    })
-
-    req.pipe(busboy)
-  } catch (error) {
-    return next(error)
-  }
-})
-
-function getDatabaseFilePath(): string {
-  const dbUrl = process.env.DATABASE_URL || 'file:./dev.db'
-  let cleanPath = dbUrl.replace(/^(sqlite|file):/, '')
-
-  if (cleanPath.includes('?')) {
-    cleanPath = cleanPath.split('?')[0]
-  }
-
-  if (!path.isAbsolute(cleanPath)) {
-    let baseDir = path.resolve(process.cwd(), 'prisma')
-    if (!fs.existsSync(baseDir)) {
-      baseDir = path.resolve(process.cwd(), 'backend', 'prisma')
-    }
-    if (!fs.existsSync(baseDir)) {
-      baseDir = path.resolve(process.cwd(), '..', 'backend', 'prisma')
-    }
-    return path.resolve(baseDir, cleanPath)
-  }
-
-  return cleanPath
+// Legacy in-app source updates and SQLite file backup/restore were incompatible
+// with the MySQL deployment and allowed arbitrary authenticated users to run
+// privileged operations. Use an authenticated deployment pipeline and
+// database-native backup tools instead.
+function unavailable(_req: AuthRequest, res: Response) {
+  return res.status(410).json({
+    code: 'FEATURE_UNAVAILABLE',
+    message: 'This server-management operation is unavailable. Use your deployment platform or managed MySQL backup tools.',
+  })
 }
+systemRouter.post('/update', unavailable)
+systemRouter.get('/update-log', unavailable)
+systemRouter.get('/backup', unavailable)
+systemRouter.post('/restore', unavailable)
