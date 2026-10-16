@@ -10,6 +10,9 @@ jobs:
   update-lock:
     if: github.repository == 'Satzzxzxx-OSS/OpenXdrive'
     runs-on: ubuntu-latest
+    env:
+      # Prisma validate requires a URL string; it does not connect to this DB.
+      DATABASE_URL: mysql://ci-placeholder:ci-placeholder@127.0.0.1:3306/openxdrive_ci
     steps:
       - uses: actions/checkout@v4
         with:
