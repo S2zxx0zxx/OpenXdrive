@@ -29,6 +29,7 @@ import { API_URL, apiFetch, formatBytes, formatDate } from '@/lib/api'
 import { getAccessToken } from '@/lib/auth'
 import { createPlyr, ensurePlyr } from '@/lib/plyr'
 import { getPreviewKind, officeViewerUrl } from '@/lib/preview'
+import { OfficeViewerConsent } from '@/components/drive/OfficeViewerConsent'
 import type { FileItem, FolderItem } from '@/data/drive-data'
 import { useUpload } from '@/context/UploadContext'
 import { useDriveLayoutActions } from '@/layouts/DriveLayout'
@@ -97,6 +98,7 @@ export function AllFilesPage() {
   const [moveOpen, setMoveOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [allowExternalOffice, setAllowExternalOffice] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [shareUrl, setShareUrl] = useState('')
@@ -402,6 +404,7 @@ export function AllFilesPage() {
     const target = fileOverride ?? activeFile
     if (!target?.id) return
     setActiveFile(target)
+    setAllowExternalOffice(false)
     setPreviewUrl('')
     setPreviewError('')
     setPreviewLoading(true)
@@ -628,6 +631,7 @@ export function AllFilesPage() {
   }
 
   function closePreview() {
+    setAllowExternalOffice(false)
     setPreviewUrl('')
     setPreviewError('')
     setPreviewLoading(false)
@@ -871,7 +875,11 @@ export function AllFilesPage() {
           {!previewLoading && !previewError && activePreviewKind === 'image' && previewUrl ? <img src={previewUrl} alt={activeFile?.name ?? 'File preview'} className="max-h-full max-w-full object-contain" onError={() => setPreviewError('Failed to load preview.')} /> : null}
           {!previewLoading && !previewError && activePreviewKind === 'video' && previewUrl ? <div className="shared-video-shell"><video ref={previewVideoRef} controls playsInline preload="metadata" onError={() => setPreviewError('Failed to load preview.')}><source src={previewUrl} type={activeFile?.mimeType} /></video></div> : null}
           {!previewLoading && !previewError && activePreviewKind === 'document' && previewUrl ? <iframe src={previewUrl} title={activeFile?.name ?? 'File preview'} className="h-full w-full border-0 bg-white" /> : null}
-          {!previewLoading && !previewError && activePreviewKind === 'office' && previewUrl ? <iframe src={officeViewerUrl(previewUrl)} title={activeFile?.name ?? 'File preview'} className="h-full w-full border-0 bg-white" /> : null}
+          {!previewLoading && !previewError && activePreviewKind === 'office' && previewUrl ? (
+             allowExternalOffice
+               ? <iframe src={officeViewerUrl(previewUrl)} title={activeFile?.name ?? 'Office file preview'} className="h-full w-full border-0 bg-white" referrerPolicy="no-referrer" />
+               : <OfficeViewerConsent onContinue={() => setAllowExternalOffice(true)} />
+           ) : null}
           {!previewLoading && !previewError && !activePreviewKind ? <div className="p-6 text-center text-sm text-slate-500">Preview not available for this file type. Use Download instead.</div> : null}
         </div>
       </DummyModal>
