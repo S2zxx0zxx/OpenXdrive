@@ -88,6 +88,7 @@ export function AllFilesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const activeFolderId = searchParams.get('folderId')
   const searchQuery = searchParams.get('q')?.trim() ?? ''
+  const searchKey = searchParams.toString()
   const [uploadOpen, setUploadOpen] = useState(false)
   const [folderOpen, setFolderOpen] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
@@ -213,7 +214,7 @@ export function AllFilesPage() {
   useEffect(() => {
     loadAll().catch((error) => setMessage(error instanceof Error ? error.message : 'Failed to load files'))
     setSelectedFileIds(new Set())
-  }, [activeFolderId, searchQuery])
+  }, [searchKey])
 
   useEffect(() => {
     async function loadConnectedAccounts() {
@@ -377,11 +378,13 @@ export function AllFilesPage() {
 
   function openFolder(folder: FolderItem) {
     if (!folder.id) return
-    setSearchParams(searchQuery ? { folderId: folder.id, q: searchQuery } : { folderId: folder.id })
+    openFolderById(folder.id)
   }
 
   function openFolderById(folderId: string) {
-    setSearchParams(searchQuery ? { folderId, q: searchQuery } : { folderId })
+    const next = new URLSearchParams(searchParams)
+    next.set('folderId', folderId)
+    setSearchParams(next)
   }
 
   function openEmptyContextMenu(event: MouseEvent<HTMLElement>) {
@@ -390,18 +393,22 @@ export function AllFilesPage() {
   }
 
   function closeFolder() {
-    setSearchParams(searchQuery ? { q: searchQuery } : {})
+    const next = new URLSearchParams(searchParams)
+    next.delete('folderId')
+    setSearchParams(next)
   }
 
-  async function viewFile() {
-    if (!activeFile?.id) return
+  async function viewFile(fileOverride?: FileItem) {
+    const target = fileOverride ?? activeFile
+    if (!target?.id) return
+    setActiveFile(target)
     setPreviewUrl('')
     setPreviewError('')
     setPreviewLoading(true)
     setPreviewOpen(true)
     setContextMenu({ x: 0, y: 0, file: null })
     try {
-      const data = await apiFetch<{ path?: string; url: string }>(`/files/${activeFile.id}/preview-token`, { method: 'POST' })
+      const data = await apiFetch<{ path?: string; url: string }>(`/files/${target.id}/preview-token`, { method: 'POST' })
       const previewPath = data.path ?? new URL(data.url).pathname
       setPreviewUrl(`${API_URL}${previewPath}`)
     } catch (error) {
@@ -736,9 +743,9 @@ export function AllFilesPage() {
       ) : (
         <Card className="mt-3 p-4 sm:p-5">
           {fileViewMode === 'grid' ? (
-            <FileGrid files={files} selectedFileIds={selectedFileIds} sizeScale={folderSizeScale} onToggleFile={toggleFileSelection} onFileContextMenu={openContext} onToggleStar={file => updateFileCollection(file, 'starred')} onToggleArchive={file => updateFileCollection(file, 'archived')} />
+            <FileGrid files={files} selectedFileIds={selectedFileIds} sizeScale={folderSizeScale} onToggleFile={toggleFileSelection} onOpenFile={file => { viewFile(file).catch(error => setMessage(String(error))) }} onFileContextMenu={openContext} onToggleStar={file => updateFileCollection(file, 'starred')} onToggleArchive={file => updateFileCollection(file, 'archived')} />
           ) : (
-            <FileTable files={files} selectedFileIds={selectedFileIds} allSelected={allVisibleSelected} onToggleFile={toggleFileSelection} onToggleAll={toggleAllVisibleFiles} onFileContextMenu={openContext} onToggleStar={file => updateFileCollection(file, 'starred')} onToggleArchive={file => updateFileCollection(file, 'archived')} />
+            <FileTable files={files} selectedFileIds={selectedFileIds} allSelected={allVisibleSelected} onToggleFile={toggleFileSelection} onToggleAll={toggleAllVisibleFiles} onOpenFile={file => { viewFile(file).catch(error => setMessage(String(error))) }} onFileContextMenu={openContext} onToggleStar={file => updateFileCollection(file, 'starred')} onToggleArchive={file => updateFileCollection(file, 'archived')} />
           )}
         </Card>
       )}
