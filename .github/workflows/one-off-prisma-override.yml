@@ -1,0 +1,38 @@
+# Temporary single-shot dependency-lock regeneration for this feature branch.
+name: Validate patched Prisma transitive dependency
+on:
+  push:
+    branches: [fix/ant-v6-postmerge-qa-security]
+    paths: [.github/workflows/one-off-prisma-override.yml]
+permissions:
+  contents: write
+jobs:
+  update-lock:
+    if: github.repository == 'Satzzxzxx-OSS/OpenXdrive'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/ant-v6-postmerge-qa-security
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Regenerate backend lockfile with narrow secure override
+        working-directory: backend
+        run: |
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci
+          npx prisma generate
+          npx prisma validate
+          npm run build
+          npm audit --omit=dev --audit-level=high
+      - name: Commit lockfile only to this feature branch
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backend/package-lock.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'chore(deps): lock patched deepmerge-ts for Prisma config'
+            git push origin HEAD:fix/ant-v6-postmerge-qa-security
+          fi
