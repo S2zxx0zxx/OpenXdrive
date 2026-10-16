@@ -12,7 +12,7 @@ export function OfficeViewerConsent({ onContinue }: { onContinue: () => void }) 
       </Typography.Paragraph>
       <Alert type="warning" showIcon
         message="Your file link will be shared with Microsoft"
-        description="Opening this preview sends a temporary file-access URL to Microsoft Office Online so its servers can retrieve the document. Continue only if you are comfortable sharing it with that provider." />
+        description="Opening this preview sends a file-access URL to Microsoft Office Online so its servers can retrieve the document. Continue only if you are comfortable sharing it with that provider." />
       <Button icon={<EyeOutlined />} type="primary" onClick={onContinue}>
         Continue to Office Online
       </Button>

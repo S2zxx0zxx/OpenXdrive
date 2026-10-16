@@ -34,3 +34,8 @@ an unreviewed Prisma major upgrade.
 - CI database records are synthetic and remain isolated from real user data.
 - Frontend production dependency audit should remain at zero after the
   compatible lockfile refresh; monitor for new advisories.
+
+## Enforced dependency policy
+- Both backend and frontend production `npm audit --omit=dev --audit-level=high` steps are **required** CI checks (no `continue-on-error`).
+- The backend `deepmerge-ts@8` override is validated through Prisma generate/validate and migrations against ephemeral MySQL in CI.
+- CI-only browser tests verify no external Office viewer is loaded until a user explicitly consents to third-party access to the document URL.
