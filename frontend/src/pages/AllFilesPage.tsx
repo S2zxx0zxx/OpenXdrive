@@ -29,6 +29,7 @@ import { API_URL, apiFetch, formatBytes, formatDate } from '@/lib/api'
 import { getAccessToken } from '@/lib/auth'
 import { createPlyr, ensurePlyr } from '@/lib/plyr'
 import { getPreviewKind, officeViewerUrl } from '@/lib/preview'
+import { OfficeViewerConsent } from '@/components/drive/OfficeViewerConsent'
 import type { FileItem, FolderItem } from '@/data/drive-data'
 import { useUpload } from '@/context/UploadContext'
 import { useDriveLayoutActions } from '@/layouts/DriveLayout'
@@ -88,6 +89,7 @@ export function AllFilesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const activeFolderId = searchParams.get('folderId')
   const searchQuery = searchParams.get('q')?.trim() ?? ''
+  const searchKey = searchParams.toString()
   const [uploadOpen, setUploadOpen] = useState(false)
   const [folderOpen, setFolderOpen] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
@@ -96,6 +98,7 @@ export function AllFilesPage() {
   const [moveOpen, setMoveOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [allowExternalOffice, setAllowExternalOffice] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [shareUrl, setShareUrl] = useState('')
@@ -213,7 +216,7 @@ export function AllFilesPage() {
   useEffect(() => {
     loadAll().catch((error) => setMessage(error instanceof Error ? error.message : 'Failed to load files'))
     setSelectedFileIds(new Set())
-  }, [activeFolderId, searchQuery])
+  }, [searchKey])
 
   useEffect(() => {
     async function loadConnectedAccounts() {
@@ -377,11 +380,13 @@ export function AllFilesPage() {
 
   function openFolder(folder: FolderItem) {
     if (!folder.id) return
-    setSearchParams(searchQuery ? { folderId: folder.id, q: searchQuery } : { folderId: folder.id })
+    openFolderById(folder.id)
   }
 
   function openFolderById(folderId: string) {
-    setSearchParams(searchQuery ? { folderId, q: searchQuery } : { folderId })
+    const next = new URLSearchParams(searchParams)
+    next.set('folderId', folderId)
+    setSearchParams(next)
   }
 
   function openEmptyContextMenu(event: MouseEvent<HTMLElement>) {
@@ -390,18 +395,23 @@ export function AllFilesPage() {
   }
 
   function closeFolder() {
-    setSearchParams(searchQuery ? { q: searchQuery } : {})
+    const next = new URLSearchParams(searchParams)
+    next.delete('folderId')
+    setSearchParams(next)
   }
 
-  async function viewFile() {
-    if (!activeFile?.id) return
+  async function viewFile(fileOverride?: FileItem) {
+    const target = fileOverride ?? activeFile
+    if (!target?.id) return
+    setActiveFile(target)
+    setAllowExternalOffice(false)
     setPreviewUrl('')
     setPreviewError('')
     setPreviewLoading(true)
     setPreviewOpen(true)
     setContextMenu({ x: 0, y: 0, file: null })
     try {
-      const data = await apiFetch<{ path?: string; url: string }>(`/files/${activeFile.id}/preview-token`, { method: 'POST' })
+      const data = await apiFetch<{ path?: string; url: string }>(`/files/${target.id}/preview-token`, { method: 'POST' })
       const previewPath = data.path ?? new URL(data.url).pathname
       setPreviewUrl(`${API_URL}${previewPath}`)
     } catch (error) {
@@ -621,6 +631,7 @@ export function AllFilesPage() {
   }
 
   function closePreview() {
+    setAllowExternalOffice(false)
     setPreviewUrl('')
     setPreviewError('')
     setPreviewLoading(false)
@@ -736,9 +747,9 @@ export function AllFilesPage() {
       ) : (
         <Card className="mt-3 p-4 sm:p-5">
           {fileViewMode === 'grid' ? (
-            <FileGrid files={files} selectedFileIds={selectedFileIds} sizeScale={folderSizeScale} onToggleFile={toggleFileSelection} onFileContextMenu={openContext} onToggleStar={file => updateFileCollection(file, 'starred')} onToggleArchive={file => updateFileCollection(file, 'archived')} />
+            <FileGrid files={files} selectedFileIds={selectedFileIds} sizeScale={folderSizeScale} onToggleFile={toggleFileSelection} onOpenFile={file => { viewFile(file).catch(error => setMessage(String(error))) }} onFileContextMenu={openContext} onToggleStar={file => updateFileCollection(file, 'starred')} onToggleArchive={file => updateFileCollection(file, 'archived')} />
           ) : (
-            <FileTable files={files} selectedFileIds={selectedFileIds} allSelected={allVisibleSelected} onToggleFile={toggleFileSelection} onToggleAll={toggleAllVisibleFiles} onFileContextMenu={openContext} onToggleStar={file => updateFileCollection(file, 'starred')} onToggleArchive={file => updateFileCollection(file, 'archived')} />
+            <FileTable files={files} selectedFileIds={selectedFileIds} allSelected={allVisibleSelected} onToggleFile={toggleFileSelection} onToggleAll={toggleAllVisibleFiles} onOpenFile={file => { viewFile(file).catch(error => setMessage(String(error))) }} onFileContextMenu={openContext} onToggleStar={file => updateFileCollection(file, 'starred')} onToggleArchive={file => updateFileCollection(file, 'archived')} />
           )}
         </Card>
       )}
@@ -864,7 +875,11 @@ export function AllFilesPage() {
           {!previewLoading && !previewError && activePreviewKind === 'image' && previewUrl ? <img src={previewUrl} alt={activeFile?.name ?? 'File preview'} className="max-h-full max-w-full object-contain" onError={() => setPreviewError('Failed to load preview.')} /> : null}
           {!previewLoading && !previewError && activePreviewKind === 'video' && previewUrl ? <div className="shared-video-shell"><video ref={previewVideoRef} controls playsInline preload="metadata" onError={() => setPreviewError('Failed to load preview.')}><source src={previewUrl} type={activeFile?.mimeType} /></video></div> : null}
           {!previewLoading && !previewError && activePreviewKind === 'document' && previewUrl ? <iframe src={previewUrl} title={activeFile?.name ?? 'File preview'} className="h-full w-full border-0 bg-white" /> : null}
-          {!previewLoading && !previewError && activePreviewKind === 'office' && previewUrl ? <iframe src={officeViewerUrl(previewUrl)} title={activeFile?.name ?? 'File preview'} className="h-full w-full border-0 bg-white" /> : null}
+          {!previewLoading && !previewError && activePreviewKind === 'office' && previewUrl ? (
+             allowExternalOffice
+               ? <iframe src={officeViewerUrl(previewUrl)} title={activeFile?.name ?? 'Office file preview'} className="h-full w-full border-0 bg-white" referrerPolicy="no-referrer" />
+               : <OfficeViewerConsent onContinue={() => setAllowExternalOffice(true)} />
+           ) : null}
           {!previewLoading && !previewError && !activePreviewKind ? <div className="p-6 text-center text-sm text-slate-500">Preview not available for this file type. Use Download instead.</div> : null}
         </div>
       </DummyModal>

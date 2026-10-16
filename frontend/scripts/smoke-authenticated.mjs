@@ -48,11 +48,19 @@ function apiResponse(requestUrl, method) {
   const path = url.pathname.replace(/^\/api/, '')
   if (method !== 'GET') return { status: 405, body: { message: 'CI mock is read-only' } }
   if (path === '/auth/me') return { user: mockUser }
+  if (path === '/public/files/qa-office') return { file: {
+    name: 'QA public office document.docx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    sizeBytes: '2400', createdAt: '2026-10-15T10:00:00.000Z',
+  } }
   if (path === '/storage/summary') return { totalBytes: '15000000000', usedBytes: '3000000000', availableBytes: '12000000000', accounts: [mockAccount] }
   if (path === '/storage/breakdown') return { photo: '500000000', video: '1000000000', document: '1500000000' }
   if (path === '/storage/routing-policy') return { policy: { mode: 'most_available', priorityAccountIds: [], roundRobinCursor: 0 } }
   if (path === '/connected-accounts') return { accounts: [mockAccount] }
-  if (path === '/files') return { files: url.searchParams.get('archived') === '1' ? [archivedFile] : [mockFile] }
+  if (path === '/files') {
+    if (url.searchParams.get('kind') === 'image') return { files: [] }
+    return { files: url.searchParams.get('archived') === '1' ? [archivedFile] : [mockFile] }
+  }
   if (path.startsWith('/folders')) return { folders: [] }
   if (path === '/audit-logs') return { logs: [] }
   if (path === '/invites') return { sent: [], received: [] }
@@ -65,6 +73,7 @@ function apiResponse(requestUrl, method) {
 let ws
 const requests = new Map()
 const seen = new Set()
+const seenUrls = new Set()
 const runtimeErrors = []
 let requestSeq = 0
 async function send(method, params = {}) {
@@ -128,6 +137,7 @@ try {
       const status = mock.status ?? 200
       const dataBody = mock.body ?? mock
       seen.add(`${request.method} ${new URL(request.url).pathname}`)
+      seenUrls.add(`${request.method} ${new URL(request.url).pathname}${new URL(request.url).search}`)
       send('Fetch.fulfillRequest', {
         requestId, responseCode: status,
         responseHeaders: [{ name: 'Content-Type', value: 'application/json; charset=utf-8' }, { name: 'Access-Control-Allow-Origin', value: '*' }],
@@ -173,6 +183,19 @@ try {
   await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
   await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
 
+  // Search-filter regression: a URL query change must trigger the existing
+  // React page to reload results without remounting the whole application.
+  await send('Runtime.evaluate', {
+    expression: `window.history.pushState({}, '', '/all-files?kind=image');window.dispatchEvent(new PopStateEvent('popstate'))`,
+  })
+  await waitFor("document.body.innerText.includes('Your workspace has no files yet')", 'Advanced kind filter refreshes the file table')
+  if (!seenUrls.has('GET /api/files?kind=image')) throw new Error('Advanced search filter did not reach /api/files')
+  await screenshot('workspace-filtered-empty.png')
+  await send('Runtime.evaluate', {
+    expression: `window.history.pushState({}, '', '/all-files');window.dispatchEvent(new PopStateEvent('popstate'))`,
+  })
+  await waitFor("document.body.innerText.includes('CI validation document.pdf')", 'Cleared filters repopulate the file manager')
+
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true })
   await delay(750)
   await waitFor("!!document.querySelector('button[aria-label=\"Open navigation\"]')", 'Mobile navigation trigger')
@@ -198,6 +221,17 @@ try {
   await navigate('/activity')
   await waitFor("document.body.innerText.includes('Activity log')", 'Activity log view')
 
+  // Privacy regression: Office access links may not be sent to Microsoft
+  // without an explicit user action. The test uses an artificial public token.
+  await navigate('/public/files/qa-office')
+  await waitFor("document.body.innerText.includes('Your file link will be shared with Microsoft')", 'Office privacy consent')
+  const beforeConsent = await send('Runtime.evaluate', {expression:"!!document.querySelector('iframe[src*=\"view.officeapps.live.com\"]')",returnByValue:true})
+  if (beforeConsent.result?.value) throw new Error('Office iframe was created before consent')
+  await screenshot('office-preview-consent.png')
+  await send('Runtime.evaluate', {
+    expression:"[...document.querySelectorAll('button')].find(b => b.textContent?.includes('Continue to Office Online'))?.click()",
+  })
+  await waitFor("!!document.querySelector('iframe[src*=\"view.officeapps.live.com\"]')", 'Office external preview consent')
   await navigate('/quota')
   await waitFor("document.body.innerText.includes('Storage insights')", 'Storage insights page')
   await waitFor("document.body.innerText.includes('QA Drive')", 'Connected quota data')

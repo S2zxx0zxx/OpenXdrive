@@ -33,6 +33,9 @@
     "undici": "^7.27.1",
     "zod": "^4.4.3"
   },
+  "overrides": {
+    "deepmerge-ts": "^8.0.2"
+  },
   "devDependencies": {
     "@types/archiver": "^8.0.0",
     "@types/busboy": "^1.5.4",

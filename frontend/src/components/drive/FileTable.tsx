@@ -1,6 +1,6 @@
 import { type MouseEvent } from 'react'
 import { Button, Card, Checkbox, Flex, Grid, List, Space, Table, Tooltip, Typography, type TableColumnsType } from 'antd'
-import { FolderOpenOutlined, MoreOutlined, StarFilled, StarOutlined, InboxOutlined, UndoOutlined, FileOutlined } from '@ant-design/icons'
+import { FolderOpenOutlined, MoreOutlined, StarFilled, StarOutlined, InboxOutlined, UndoOutlined, FileOutlined, EyeOutlined } from '@ant-design/icons'
 import { FileIcon } from '@/components/drive/FileIcon'
 import type { FileItem } from '@/data/drive-data'
 
@@ -15,9 +15,10 @@ type Props = {
   onToggleAll?: () => void
   onToggleStar?: (file: FileItem) => void
   onToggleArchive?: (file: FileItem) => void
+  onOpenFile?: (file: FileItem) => void
 }
 
-export function FileTable({ files, mode = 'default', selectedFileIds = new Set<string>(), allSelected = false, onFileContextMenu, onToggleFile, onToggleAll, onToggleStar, onToggleArchive }: Props) {
+export function FileTable({ files, mode = 'default', selectedFileIds = new Set<string>(), allSelected = false, onFileContextMenu, onToggleFile, onToggleAll, onToggleStar, onToggleArchive, onOpenFile }: Props) {
   const screens = Grid.useBreakpoint()
   const isMobile = !screens.sm
   const columns: TableColumnsType<FileItem> = [
@@ -48,8 +49,9 @@ export function FileTable({ files, mode = 'default', selectedFileIds = new Set<s
       render: (_, record) => <Typography.Text type={record.shared > 0 ? 'success' : 'secondary'}>{record.access}</Typography.Text>,
     },
     {
-      title: '', key: 'actions', width: 160, align: 'right',
+      title: '', key: 'actions', width: 185, align: 'right',
       render: (_, record) => <Space size={2}>
+        {onOpenFile && <Tooltip title="Preview file"><Button type="text" size="small" icon={<EyeOutlined />} aria-label={`Preview ${record.name}`} onClick={e=>{e.stopPropagation();onOpenFile(record)}} /></Tooltip>}
         {onToggleStar && <Tooltip title={record.starredAt ? 'Remove from Starred' : 'Add to Starred'}><Button type="text" size="small" icon={record.starredAt ? <StarFilled style={{color:'#e7a000'}}/> : <StarOutlined />} aria-label={record.starredAt ? 'Unstar file' : 'Star file'} onClick={e=>{e.stopPropagation();onToggleStar(record)}} /></Tooltip>}
         {onToggleArchive && <Tooltip title={record.archivedAt ? 'Restore from Archive' : 'Move to Archive'}><Button type="text" size="small" icon={record.archivedAt ? <UndoOutlined/> : <InboxOutlined/>} aria-label={record.archivedAt ? 'Restore archived file' : 'Archive file'} onClick={e=>{e.stopPropagation();onToggleArchive(record)}} /></Tooltip>}
         {onFileContextMenu && <Button size="small" type="text" icon={<MoreOutlined />} aria-label={`More actions for ${record.name}`}
@@ -76,6 +78,7 @@ export function FileTable({ files, mode = 'default', selectedFileIds = new Set<s
                 <Typography.Text strong ellipsis style={{ display: 'block' }}>{file.name}</Typography.Text>
                 <Space size={5}><Typography.Text type="secondary" style={{ fontSize: 11 }}>{file.size}</Typography.Text><Typography.Text type="secondary" style={{ fontSize: 11 }}>· {file.date}</Typography.Text></Space>
               </div>
+              {onOpenFile && <Button size="small" type="text" icon={<EyeOutlined />} aria-label={`Preview ${file.name}`} onClick={e=>{e.stopPropagation();onOpenFile(file)}} />}
               {onToggleStar && <Button size="small" type="text" icon={file.starredAt ? <StarFilled style={{color:'#e7a000'}}/> : <StarOutlined />} aria-label={file.starredAt ? 'Unstar file' : 'Star file'} onClick={e=>{e.stopPropagation();onToggleStar(file)}} />}
               {onToggleArchive && <Button size="small" type="text" icon={file.archivedAt ? <UndoOutlined/> : <InboxOutlined/>} aria-label={file.archivedAt ? 'Restore archived file' : 'Archive file'} onClick={e=>{e.stopPropagation();onToggleArchive(file)}} />}
               {onFileContextMenu && <Button type="text" icon={<MoreOutlined />} onClick={e => { e.stopPropagation(); onFileContextMenu(e, file) }} aria-label={`More actions for ${file.name}`} />}
@@ -102,6 +105,14 @@ export function FileTable({ files, mode = 'default', selectedFileIds = new Set<s
         draggable: true,
         onDragStart: event => { event.dataTransfer.setData('text/plain', file.id ?? ''); event.dataTransfer.effectAllowed = 'move' },
         onContextMenu: event => onFileContextMenu?.(event, file),
+        onDoubleClick: () => onOpenFile?.(file),
+        tabIndex: onOpenFile ? 0 : undefined,
+        onKeyDown: event => {
+          if (onOpenFile && event.key === 'Enter' && event.target === event.currentTarget) {
+            event.preventDefault()
+            onOpenFile(file)
+          }
+        },
         onClick: () => onToggleFile?.(file),
         className: selectedFileIds.has(file.id ?? '') ? 'file-selected' : '',
       })}

@@ -47,7 +47,6 @@ jobs:
         run: npm run build
       - name: Audit backend production dependencies
         working-directory: backend
-        continue-on-error: true
         run: npm audit --omit=dev --audit-level=high
       - name: Install frontend dependencies
         working-directory: frontend
@@ -69,7 +68,6 @@ jobs:
           retention-days: 7
       - name: Audit frontend production dependencies
         working-directory: frontend
-        continue-on-error: true
         run: npm audit --omit=dev --audit-level=high
 
   real-api-integration:

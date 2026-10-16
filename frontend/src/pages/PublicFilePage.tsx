@@ -6,6 +6,7 @@ import { API_URL, apiFetch, formatBytes, formatDate } from '@/lib/api'
 import { createPlyr, ensurePlyr } from '@/lib/plyr'
 import { getPreviewKind, isSpreadsheetMimeType, officeViewerUrl } from '@/lib/preview'
 import { BrandLogo } from '@/components/drive/BrandLogo'
+import { OfficeViewerConsent } from '@/components/drive/OfficeViewerConsent'
 
 type PublicFile = { name: string; mimeType: string; sizeBytes: string; createdAt: string }
 type PreviewType = ReturnType<typeof getPreviewKind>
@@ -21,6 +22,7 @@ export function PublicFilePage({ embed = false }: { embed?: boolean }) {
   const { token } = useParams()
   const [file, setFile] = useState<PublicFile | null>(null)
   const [failed, setFailed] = useState(false)
+  const [allowExternalOffice, setAllowExternalOffice] = useState(false)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const previewUrl = `${API_URL}/public/files/${token}/preview`
   const downloadUrl = `${API_URL}/public/files/${token}/download`
@@ -28,6 +30,7 @@ export function PublicFilePage({ embed = false }: { embed?: boolean }) {
 
   useEffect(() => {
     setFailed(false)
+    setAllowExternalOffice(false)
     apiFetch<{ file: PublicFile }>(`/public/files/${token}`, { skipAuth: true })
       .then((data) => setFile(data.file))
       .catch(() => {
@@ -69,7 +72,9 @@ export function PublicFilePage({ embed = false }: { embed?: boolean }) {
       {kind==='image'&&<img src={previewUrl} alt={file.name} style={{maxWidth:'100%',maxHeight:'100%',objectFit:'contain'}} />}
       {kind==='video'&&<div className="shared-video-shell"><video ref={videoRef} controls playsInline preload="metadata"><source src={previewUrl} type={file.mimeType}/></video></div>}
       {kind==='document'&&<iframe src={previewUrl} title={file.name} style={{height:'100%',width:'100%',border:0,background:'white'}}/>}
-      {kind==='office'&&<iframe src={officeViewerUrl(previewUrl)} title={file.name} style={{height:'100%',width:'100%',border:0,background:'white'}}/>}
+      {kind==='office'&&(allowExternalOffice
+        ? <iframe src={officeViewerUrl(previewUrl)} title={file.name} referrerPolicy="no-referrer" style={{height:'100%',width:'100%',border:0,background:'white'}}/>
+        : <OfficeViewerConsent onContinue={()=>setAllowExternalOffice(true)}/> )}
       {!kind&&<div style={{background:'var(--ox-surface)',maxWidth:600}}><UnsupportedPreview file={file} downloadUrl={downloadUrl}/></div>}
     </Flex>
   )
