@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { HardDrive } from 'lucide-react'
-import { Card } from '@/components/ui/card'
+import { Card, Flex, Result, Spin, Typography } from 'antd'
 import { apiFetch } from '@/lib/api'
 import { setAuthSession, type AuthUser } from '@/lib/auth'
 
@@ -28,13 +27,10 @@ export function GoogleAuthPage() {
       .catch((error) => setMessage(error instanceof Error ? error.message : 'Google sign-in failed. Please try again.'))
   }, [navigate, status, token])
 
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 p-5">
-      <Card className="w-full max-w-sm p-6 text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 text-white"><HardDrive className="h-6 w-6" /></div>
-        <h1 className="mt-4 text-xl font-extrabold">Google Sign-in</h1>
-        <p className="mt-2 text-sm text-slate-500">{message}</p>
-      </Card>
-    </main>
-  )
+  return <Flex align="center" justify="center" style={{minHeight:'100vh',padding:24,background:'var(--ox-canvas)'}}>
+    <Card style={{width:'100%',maxWidth:450,textAlign:'center'}}>
+      {status==='error'||!token ? <Result status="error" title="Google sign-in failed" subTitle={message} /> :
+        <div style={{padding:'40px 10px'}}><Spin size="large" /><Typography.Title level={4} style={{marginTop:25}}>Connecting your account</Typography.Title><Typography.Text type="secondary">{message}</Typography.Text></div>}
+    </Card>
+  </Flex>
 }

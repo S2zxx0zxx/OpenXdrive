@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
-import { RotateCcw, Trash2, ShieldAlert, FileText, CheckCircle2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
+import { Alert, Button, Card, Empty, Space, Table, Typography, type TableColumnsType } from 'antd'
+import { DeleteOutlined, FileOutlined, ReloadOutlined, UndoOutlined } from '@ant-design/icons'
 import { PageHeader } from '@/components/drive/PageHeader'
 import { apiFetch, formatBytes } from '@/lib/api'
 
@@ -110,118 +109,31 @@ export function TrashPage() {
     }
   }
 
-  return (
-    <>
-      <PageHeader
-        title="Recycle Bin"
-        description="Manage deleted files. Restore them to active folders or delete them permanently."
-        actions={
-          selectedIds.size > 0 ? (
-            <>
-              <Button variant="outline" onClick={() => handleRestore(Array.from(selectedIds))} disabled={loading}>
-                <RotateCcw className="h-4 w-4" /> Restore Selected ({selectedIds.size})
-              </Button>
-              <Button variant="danger" onClick={() => handlePermanentDelete(Array.from(selectedIds))} disabled={loading}>
-                <Trash2 className="h-4 w-4" /> Delete Selected ({selectedIds.size})
-              </Button>
-            </>
-          ) : null
-        }
-      />
-
-      {message ? (
-        <p
-          className={`mt-5 rounded-xl p-3 text-sm flex items-center gap-2 ${
-            messageType === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
-          }`}
-        >
-          {messageType === 'success' ? <CheckCircle2 className="h-4 w-4" /> : <ShieldAlert className="h-4 w-4" />}
-          {message}
-        </p>
-      ) : null}
-
-      <Card className="mt-8 overflow-hidden">
-        {files.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-12 text-center">
-            <Trash2 className="h-12 w-12 text-slate-400 mb-3" />
-            <p className="text-base font-bold">Trash is empty</p>
-            <p className="text-sm text-slate-500 mt-1">Deleted files will appear here.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-200 text-sm font-semibold text-slate-500">
-                  <th className="p-4 w-12">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.size === files.length && files.length > 0}
-                      onChange={toggleSelectAll}
-                      className="rounded border-slate-300"
-                    />
-                  </th>
-                  <th className="p-4">Name</th>
-                  <th className="p-4">Account</th>
-                  <th className="p-4">Size</th>
-                  <th className="p-4">Deleted At</th>
-                  <th className="p-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {files.map((file) => (
-                  <tr key={file.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition">
-                    <td className="p-4">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(file.id)}
-                        onChange={() => toggleSelect(file.id)}
-                        className="rounded border-slate-300"
-                      />
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center gap-3">
-                        <FileText className="h-5 w-5 text-slate-400 shrink-0" />
-                        <span className="font-medium truncate max-w-xs sm:max-w-md block" title={file.name}>
-                          {file.name}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="p-4 text-sm text-slate-500">
-                      {file.connectedAccount.email} ({file.provider})
-                    </td>
-                    <td className="p-4 text-sm font-semibold">{formatBytes(file.sizeBytes)}</td>
-                    <td className="p-4 text-sm text-slate-500">
-                      {new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(file.deletedAt))}
-                    </td>
-                    <td className="p-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRestore([file.id])}
-                          disabled={loading}
-                          title="Restore"
-                        >
-                          <RotateCcw className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={() => handlePermanentDelete([file.id])}
-                          disabled={loading}
-                          title="Delete Permanently"
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
-    </>
-  )
+  const columns:TableColumnsType<TrashFile> = [
+    {title:'File name',dataIndex:'name',key:'name',render:(name:string)=><Space><FileOutlined style={{color:'#1677ff'}}/><Typography.Text strong ellipsis style={{maxWidth:250,display:'block'}}>{name}</Typography.Text></Space>},
+    {title:'Cloud account',key:'account',render:(_,file)=><Typography.Text type="secondary">{file.connectedAccount.email} ({file.provider})</Typography.Text>},
+    {title:'Size',dataIndex:'sizeBytes',key:'size',render:(value:string)=>formatBytes(value)},
+    {title:'Deleted at',dataIndex:'deletedAt',key:'date',sorter:(a,b)=>new Date(a.deletedAt).getTime()-new Date(b.deletedAt).getTime(),
+      render:(value:string)=>new Intl.DateTimeFormat('en',{dateStyle:'medium',timeStyle:'short'}).format(new Date(value))},
+    {title:'Actions',key:'actions',align:'right',width:165,render:(_,file)=><Space size={3}>
+      <Button size="small" icon={<UndoOutlined />} onClick={()=>handleRestore([file.id])} loading={loading}>Restore</Button>
+      <Button danger type="text" size="small" icon={<DeleteOutlined />} onClick={()=>handlePermanentDelete([file.id])} disabled={loading} aria-label={`Permanently delete ${file.name}`} />
+    </Space>},
+  ]
+  return <>
+    <PageHeader title="Recycle bin" description="Review and restore deleted files before permanently removing them."
+      actions={<Space wrap>
+        <Button icon={<ReloadOutlined />} onClick={()=>loadTrash()} loading={loading}>Refresh</Button>
+        {selectedIds.size>0&&<Button icon={<UndoOutlined />} onClick={()=>handleRestore(Array.from(selectedIds))} disabled={loading}>Restore ({selectedIds.size})</Button>}
+        {selectedIds.size>0&&<Button danger icon={<DeleteOutlined />} onClick={()=>handlePermanentDelete(Array.from(selectedIds))} disabled={loading}>Delete ({selectedIds.size})</Button>}
+      </Space>} />
+    {message&&<Alert type={messageType==='success'?'success':'error'} message={message} showIcon closable onClose={()=>setMessage('')} style={{marginBottom:17}} />}
+    <Card title={<Space><DeleteOutlined />Deleted files</Space>} extra={<Typography.Text type="secondary">{files.length} items</Typography.Text>}>
+      <Table<TrashFile> rowKey="id" columns={columns} dataSource={files} loading={loading}
+        rowSelection={{selectedRowKeys:Array.from(selectedIds),onSelect:file=>toggleSelect(file.id),onSelectAll:()=>toggleSelectAll()}}
+        pagination={files.length>20?{pageSize:20,showSizeChanger:true}:false}
+        scroll={{x:780}}
+        locale={{emptyText:<Empty description="Your recycle bin is empty" />}} />
+    </Card>
+  </>
 }

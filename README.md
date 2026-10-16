@@ -29,7 +29,7 @@ Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for detai
 - Optional reCAPTCHA on email/password registration.
 - MySQL database with Prisma migrations.
 - Express + TypeScript backend.
-- React + Vite frontend.
+- React + Vite frontend, redesigned with **Ant Design 6** and `@ant-design/icons` for the workspace, file manager, cloud connections, auth and sharing. Desktop/mobile Chromium smoke artifacts are produced in GitHub Actions.
 
 ## Production administration and data safety
 

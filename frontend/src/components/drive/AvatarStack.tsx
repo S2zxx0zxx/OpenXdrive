@@ -1,21 +1,14 @@
-// Only render neutral local indicators: never load arbitrary example faces
-// from a third-party avatar service, or imply demo users are real people.
-export function AvatarStack({ count }: { count: number }) {
-  const visible = Math.min(4, Math.max(0, Math.floor(count)))
-  const remaining = Math.max(0, Math.floor(count) - visible)
+import { Avatar, Tooltip } from 'antd'
 
-  return (
-    <div className="flex -space-x-2" aria-label={`${count} members`}>
-      {Array.from({ length: visible }, (_, index) => (
-        <span
-          key={index}
-          className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-blue-600 text-[9px] font-semibold text-white"
-          aria-hidden="true"
-        >
-          {index + 1}
-        </span>
-      ))}
-      {remaining > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-slate-600 px-0.5 text-[8px] font-semibold text-white" aria-hidden="true">+{remaining}</span>}
-    </div>
-  )
+// Representative member counts without external demo-face services.
+export function AvatarStack({ count }: {count:number}) {
+  const total=Math.max(0,Math.floor(count))
+  if (!total) return null
+  const visible=Math.min(total,3)
+  return <Avatar.Group max={{count:4}} size="small">
+    {Array.from({length:visible},(_,i)=><Tooltip key={i} title="Shared member">
+      <Avatar style={{background:'#dbeafe',color:'#175cd3',fontSize:10}}>{i+1}</Avatar>
+    </Tooltip>)}
+    {total>visible && <Avatar style={{background:'#eef2f7',color:'#334155',fontSize:10}}>+{total-visible}</Avatar>}
+  </Avatar.Group>
 }

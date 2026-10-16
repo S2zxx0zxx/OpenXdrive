@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { CheckCircle, XCircle } from 'lucide-react'
-import { Card } from '@/components/ui/card'
+import { Card, Flex, Result } from 'antd'
 
 export function GoogleConnectedPage() {
   const [params] = useSearchParams()
@@ -18,13 +17,10 @@ export function GoogleConnectedPage() {
     return () => window.clearTimeout(timer)
   }, [navigate, status])
 
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 p-5">
-      <Card className="w-full max-w-sm p-6 text-center">
-        {ok ? <CheckCircle className="mx-auto h-10 w-10 text-emerald-500" /> : <XCircle className="mx-auto h-10 w-10 text-red-500" />}
-        <h1 className="mt-4 text-xl font-extrabold">{ok ? 'Google Drive Connected' : 'Connection Failed'}</h1>
-        <p className="mt-2 text-sm text-slate-500">{ok ? 'This window will close automatically.' : 'Close this window and try again.'}</p>
-      </Card>
-    </main>
-  )
+  return <Flex align="center" justify="center" style={{minHeight:'100vh',padding:24,background:'var(--ox-canvas)'}}>
+    <Card style={{width:'100%',maxWidth:450}}>
+      <Result status={ok?'success':'error'} title={ok?'Google Drive connected':'Connection failed'}
+        subTitle={ok?'Your connected account is ready. This window will close automatically.':'Close this window and try again.'} />
+    </Card>
+  </Flex>
 }

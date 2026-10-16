@@ -1,6 +1,10 @@
-import * as React from 'react'
-import { cn } from '@/lib/utils'
+import type { HTMLAttributes } from 'react'
+import { Card as AntCard } from 'antd'
 
-export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('rounded-2xl border border-slate-200 bg-white shadow-sm', className)} {...props} />
+export function Card({ children, className, ...rest }: HTMLAttributes<HTMLDivElement>) {
+  return (
+    <AntCard className={className} styles={{ body: { padding: 0 } }} {...rest}>
+      {children}
+    </AntCard>
+  )
 }

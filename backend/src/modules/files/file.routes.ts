@@ -44,7 +44,9 @@ fileRouter.get('/', async (req: AuthRequest, res, next) => {
       minSize: z.coerce.number().optional(),
       maxSize: z.coerce.number().optional(),
       startDate: z.string().datetime().optional(),
-      endDate: z.string().datetime().optional()
+      endDate: z.string().datetime().optional(),
+      starred: z.enum(['0', '1']).optional(),
+      archived: z.enum(['0', '1']).optional()
     }).parse(req.query)
 
     const typeFilters: Record<string, string[]> = {
@@ -58,6 +60,8 @@ fileRouter.get('/', async (req: AuthRequest, res, next) => {
     const where: any = {
       userId: req.user!.id,
       status: 'active',
+      ...(query.archived === '1' ? { archivedAt: { not: null } } : { archivedAt: null }),
+      ...(query.starred === '1' ? { starredAt: { not: null } } : {}),
       ...(query.folderId ? { folderId: query.folderId } : {}),
       ...(query.q ? { name: { contains: query.q } } : {}),
       ...(query.accountId ? { connectedAccountId: query.accountId } : {}),
@@ -80,7 +84,8 @@ fileRouter.get('/', async (req: AuthRequest, res, next) => {
       where,
       include: {
         connectedAccount: { select: { id: true, email: true, provider: true } },
-        folder: { select: { id: true, name: true } }
+        folder: { select: { id: true, name: true } },
+        _count: { select: { shares: { where: { enabled: true, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } } } },
       },
       orderBy: { createdAt: 'desc' }
     })
@@ -267,13 +272,30 @@ fileRouter.get('/:id', async (req: AuthRequest, res, next) => {
 
 fileRouter.patch('/:id', async (req: AuthRequest, res, next) => {
   try {
-    const body = z.object({ name: z.string().min(1).max(255).optional(), folderId: z.string().nullable().optional() }).parse(req.body)
+    const body = z.object({
+      name: z.string().min(1).max(255).optional(),
+      folderId: z.string().nullable().optional(),
+      starred: z.boolean().optional(),
+      archived: z.boolean().optional(),
+    }).refine(value => Object.values(value).some(field => field !== undefined), 'At least one update is required').parse(req.body)
     const fileId = String(req.params.id)
-    const file = await prisma.file.findFirstOrThrow({ where: { id: fileId, userId: req.user!.id }, include: { connectedAccount: true } })
-    const drive = file.provider === 's3' ? null : google.drive({ version: 'v3', auth: await getAuthedGoogleClient(file.connectedAccount) })
+    const file = await prisma.file.findFirstOrThrow({
+      where: { id: fileId, userId: req.user!.id, status: 'active' },
+      include: { connectedAccount: true },
+    })
     if (body.folderId) await prisma.folder.findFirstOrThrow({ where: { id: body.folderId, userId: req.user!.id, deletedAt: null } })
-    if (body.name && drive) await drive.files.update({ fileId: file.providerFileId, requestBody: { name: body.name } })
-    const updated = await prisma.file.update({ where: { id: file.id }, data: { ...(body.name ? { name: body.name } : {}), ...(body.folderId !== undefined ? { folderId: body.folderId } : {}) }, include: { connectedAccount: { select: { id: true, email: true, provider: true } }, folder: { select: { id: true, name: true } } } })
+    if (body.name && file.provider === 'google_drive') {
+      const auth = await getAuthedGoogleClient(file.connectedAccount)
+      await google.drive({ version: 'v3', auth }).files.update({
+        fileId: file.providerFileId,
+        requestBody: { name: body.name },
+      })
+    }
+    const updated = await prisma.file.update({ where: { id: file.id }, data: { ...(body.name ? { name: body.name } : {}),
+      ...(body.folderId !== undefined ? { folderId: body.folderId } : {}),
+      ...(body.starred !== undefined ? { starredAt: body.starred ? new Date() : null } : {}),
+      ...(body.archived !== undefined ? { archivedAt: body.archived ? new Date() : null } : {}),
+      }, include: { connectedAccount: { select: { id: true, email: true, provider: true } }, folder: { select: { id: true, name: true } } } })
     await createAuditLog(req.user!.id, 'UPDATE_FILE', 'file', updated.id, { name: updated.name, updates: body })
     return res.json({ file: { ...updated, sizeBytes: updated.sizeBytes.toString() } })
   } catch (error) {
@@ -304,7 +326,7 @@ fileRouter.post('/:id/share', async (req: AuthRequest, res, next) => {
 fileRouter.post('/:id/public-permission', requireAuth, async (req: AuthRequest, res, next) => {
   try {
     const fileId = String(req.params.id)
-    const file = await prisma.file.findFirstOrThrow({ where: { id: fileId, userId: req.user!.id }, include: { connectedAccount: true } })
+    const file = await prisma.file.findFirstOrThrow({ where: { id: fileId, userId: req.user!.id, status: 'active' }, include: { connectedAccount: true } })
     if (file.provider !== 'google_drive') {
       return res.status(400).json({ code: 'UNSUPPORTED_PROVIDER', message: 'Only Google Drive files can be made public.' })
     }
@@ -313,7 +335,7 @@ fileRouter.post('/:id/public-permission', requireAuth, async (req: AuthRequest, 
     await drive.permissions.create({
       fileId: file.providerFileId,
       requestBody: {
-        role: 'writer',
+        role: 'reader',
         type: 'anyone'
       }
     })

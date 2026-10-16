@@ -1,11 +1,6 @@
-import * as React from 'react'
-import { cn } from '@/lib/utils'
+import type { InputHTMLAttributes } from 'react'
+import { Input as AntInput, type InputProps as AntInputProps } from 'antd'
 
-export function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <input
-      className={cn('h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100', className)}
-      {...props}
-    />
-  )
+export function Input({ className, size: _size, ...props }: InputHTMLAttributes<HTMLInputElement>) {
+  return <AntInput {...(props as AntInputProps)} className={className} />
 }

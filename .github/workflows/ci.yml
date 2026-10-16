@@ -3,6 +3,8 @@ on:
   pull_request:
   push:
     branches: [main]
+permissions:
+  contents: read
 jobs:
   brand-and-build:
     runs-on: ubuntu-latest
@@ -53,7 +55,74 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         run: npm run build
+      - name: Smoke-test login and registration in Chrome
+        working-directory: frontend
+        shell: bash
+        run: bash scripts/smoke-ui.sh
+      - name: Upload frontend UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openxdrive-ui-smoke
+          path: frontend/ui-smoke-artifacts/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Audit frontend production dependencies
         working-directory: frontend
         continue-on-error: true
         run: npm audit --omit=dev --audit-level=high
+
+  real-api-integration:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: openxdrive_integration
+          MYSQL_ROOT_PASSWORD: ci-isolated-only-not-a-production-secret
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci-isolated-only-not-a-production-secret"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      DATABASE_URL: mysql://root:ci-isolated-only-not-a-production-secret@127.0.0.1:3306/openxdrive_integration
+      FRONTEND_URL: http://127.0.0.1:4173
+      APP_PORT: '4000'
+      JWT_ACCESS_SECRET: ci-only-access-signature-not-used-outside-workflow
+      TOKEN_ENCRYPTION_KEY: ci-only-token-encryption-key-at-least-32-bytes
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install backend from lockfile
+        working-directory: backend
+        run: npm ci
+      - name: Generate Prisma and apply real MySQL migrations
+        working-directory: backend
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy
+      - name: Build backend
+        working-directory: backend
+        run: npm run build
+      - name: Test real backend API and tenant-isolated data preservation
+        working-directory: backend
+        shell: bash
+        run: |
+          node dist/server.js > /tmp/oxd-integration-backend.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          node scripts/integration-smoke.mjs || { cat /tmp/oxd-integration-backend.log; exit 1; }
+
+  docker-image-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend self-hosting image
+        run: docker build --pull -t openxdrive-backend:ci ./backend
+      - name: Build frontend self-hosting image
+        run: docker build --pull --build-arg VITE_API_URL=/api -t openxdrive-frontend:ci ./frontend

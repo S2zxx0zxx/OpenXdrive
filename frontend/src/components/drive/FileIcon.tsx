@@ -1,11 +1,9 @@
-import { FileArchive, FileImage, FilePlay, Folder } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { FileImageOutlined, FilePdfOutlined, FileTextOutlined, VideoCameraOutlined } from '@ant-design/icons'
 import type { FileItem } from '@/data/drive-data'
 
 export function FileIcon({ kind, className }: { kind: FileItem['kind']; className?: string }) {
-  const base = 'h-4 w-4 rounded-sm p-0.5 text-white'
-  if (kind === 'image') return <FileImage className={cn(base, 'bg-yellow-400', className)} />
-  if (kind === 'video') return <FilePlay className={cn(base, 'bg-orange-500', className)} />
-  if (kind === 'pdf') return <FileArchive className={cn(base, 'bg-cyan-400', className)} />
-  return <Folder className={cn(base, 'bg-lime-500', className)} />
+  const icon = kind === 'image' ? <FileImageOutlined /> : kind === 'video' ? <VideoCameraOutlined /> : kind === 'pdf' ? <FilePdfOutlined /> : <FileTextOutlined />
+  const color = kind === 'image' ? '#0d9488' : kind === 'video' ? '#7c3aed' : kind === 'pdf' ? '#dc2626' : '#1677ff'
+  const background = kind === 'image' ? '#e6f8f3' : kind === 'video' ? '#f2edff' : kind === 'pdf' ? '#fff0f0' : '#eaf3ff'
+  return <span className={className} style={{ display:'inline-flex', justifyContent:'center', alignItems:'center', height:34, width:34, borderRadius:8, flexShrink:0, color, background, fontSize:17 }} aria-hidden="true">{icon}</span>
 }

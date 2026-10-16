@@ -1,6 +1,17 @@
-import { useEffect, useRef, useState, type DragEvent, type FormEvent, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Archive, CheckCircle, ClipboardPaste, Download, FolderInput, FolderPlus, LayoutGrid, List, RefreshCw, Star, Trash2, Upload, X } from 'lucide-react'
+import { Alert, Button as AntButton, ColorPicker, Empty, Popconfirm, Segmented, Select, Space, Tooltip, Typography, Upload as AntUpload } from 'antd'
+import { AppstoreOutlined, InboxOutlined, UnorderedListOutlined } from '@ant-design/icons'
+import {
+  CheckCircleOutlined as CheckCircle,
+  DownloadOutlined as Download,
+  FolderOpenOutlined as FolderInput,
+  FolderAddOutlined as FolderPlus,
+  ReloadOutlined as RefreshCw,
+  DeleteOutlined as Trash2,
+  UploadOutlined as Upload,
+  CloseOutlined as X,
+} from '@ant-design/icons'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { DummyModal } from '@/components/drive/DummyModal'
@@ -22,16 +33,9 @@ import type { FileItem, FolderItem } from '@/data/drive-data'
 import { useUpload } from '@/context/UploadContext'
 import { useDriveLayoutActions } from '@/layouts/DriveLayout'
 
-type BackendFile = { id: string; name: string; mimeType: string; sizeBytes: string; createdAt: string; folderId?: string | null; connectedAccount?: { email: string; provider: string }; folder?: { id: string; name: string } | null }
+type BackendFile = { id: string; name: string; mimeType: string; sizeBytes: string; createdAt: string; folderId?: string | null; connectedAccount?: { email: string; provider: string }; folder?: { id: string; name: string } | null; starredAt?: string | null; archivedAt?: string | null; _count?: { shares: number } }
 type BackendFolder = { id: string; name: string; color: string; iconUrl?: string | null; parentId?: string | null; providerFolderId?: string | null; updatedAt: string }
 type ConnectedAccount = { id: string; provider: string; email: string; displayName?: string | null; status: string }
-
-const sizeActiveClasses: Record<FolderSizeScale, string> = {
-  xs: 'bg-white text-slate-800 dark:bg-red-500/20 dark:text-red-300 dark:border-red-500/30 shadow-sm dark:shadow-none',
-  sm: 'bg-white text-slate-800 dark:bg-orange-500/20 dark:text-orange-300 dark:border-orange-500/30 shadow-sm dark:shadow-none',
-  md: 'bg-white text-slate-800 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30 shadow-sm dark:shadow-none',
-  lg: 'bg-white text-slate-800 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-500/30 shadow-sm dark:shadow-none'
-}
 
 type FileViewMode = 'list' | 'grid'
 
@@ -49,13 +53,8 @@ function mimeToKind(mimeType: string): FileItem['kind'] {
   return 'doc'
 }
 
-function providerLabel(provider: string | undefined) {
-  if (provider === 's3') return 'S3 Storage'
-  return 'Google Drive'
-}
-
 function mapFile(file: BackendFile): FileItem {
-  return { id: file.id, name: file.name, mimeType: file.mimeType, sizeBytes: file.sizeBytes, createdAt: file.createdAt, accountEmail: file.connectedAccount?.email, accountProvider: providerLabel(file.connectedAccount?.provider), date: formatDate(file.createdAt), size: formatBytes(file.sizeBytes), access: file.connectedAccount?.email ?? providerLabel(file.connectedAccount?.provider), kind: mimeToKind(file.mimeType), shared: 1, folderId: file.folderId, folderName: file.folder?.name }
+  return { id: file.id, name: file.name, mimeType: file.mimeType, sizeBytes: file.sizeBytes, createdAt: file.createdAt, accountEmail: file.connectedAccount?.email, accountProvider: file.connectedAccount?.provider, date: formatDate(file.createdAt), size: formatBytes(file.sizeBytes), access: (file._count?.shares ?? 0)>0 ? 'Shared link' : 'Private', kind: mimeToKind(file.mimeType), shared: file._count?.shares ?? 0, folderId: file.folderId, folderName: file.folder?.name, starredAt: file.starredAt, archivedAt: file.archivedAt }
 }
 
 function mapFolder(folder: BackendFolder): FolderItem {
@@ -68,9 +67,19 @@ function FolderAppearanceFields({ color, iconUrl, onColorChange, onIconChange }:
   const normalizedColor = normalizeFolderColor(color)
   return (
     <div className="grid gap-4">
-      <label className="grid gap-2 text-sm font-semibold">Folder Color<Input type="color" value={normalizedColor} onChange={(event) => onColorChange(event.target.value)} className="h-12 p-1" /></label>
-      <div className="flex flex-wrap gap-2">{folderColorOptions.map((option) => <button key={option} type="button" onClick={() => onColorChange(option)} className={normalizedColor === option ? 'h-8 w-8 rounded-lg border-2 border-blue-600' : 'h-8 w-8 rounded-lg border border-slate-200'} style={{ backgroundColor: option }} aria-label={`Use ${option} folder color`} />)}</div>
-      <div className="grid gap-2 text-sm font-semibold"><span>Folder Icon</span><div className="grid grid-cols-4 gap-2 sm:grid-cols-8">{folderIconOptions.map((option) => <button key={option.url} type="button" onClick={() => onIconChange(option.url)} className={iconUrl === option.url ? 'flex h-12 items-center justify-center rounded-xl border-2 border-blue-600 bg-blue-50 p-2' : 'flex h-12 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 p-2 hover:bg-slate-100'} title={option.label} aria-label={`Use ${option.label} icon`}><FolderIcon iconUrl={option.url} color={normalizedColor} className="h-6 w-6" /></button>)}</div></div>
+      <label className="grid gap-2 text-sm font-semibold">Folder color<ColorPicker value={normalizedColor} showText onChange={value=>onColorChange(value.toHexString())} /></label>
+      <Space wrap>{folderColorOptions.map(option => <Tooltip title={option} key={option}>
+        <AntButton type="default" size="small" onClick={() => onColorChange(option)} aria-label={`Choose ${option} folder color`}
+          style={{ background:option, border:normalizedColor===option?'2px solid #1677ff':'1px solid var(--ox-outline)',width:29,height:29,padding:0 }} />
+      </Tooltip>)}</Space>
+      <div className="grid gap-2 text-sm font-semibold"><span>Folder icon</span>
+        <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">{folderIconOptions.map(option => <Tooltip key={option.url} title={option.label}>
+          <AntButton type={iconUrl===option.url?'primary':'default'} onClick={() => onIconChange(option.url)}
+            aria-label={`Choose ${option.label} folder icon`} style={{height:42,padding:5}}>
+            <FolderIcon iconUrl={option.url} color={iconUrl===option.url?'#fff':normalizedColor} className="h-5 w-5" />
+          </AntButton>
+        </Tooltip>)}</div>
+      </div>
     </div>
   )
 }
@@ -99,7 +108,6 @@ export function AllFilesPage() {
   const [allFolders, setAllFolders] = useState<FolderItem[]>([])
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [selectedFolderId, setSelectedFolderId] = useState('')
-  const [isUploadDragging, setIsUploadDragging] = useState(false)
   const [folderName, setFolderName] = useState('')
   const [folderColor, setFolderColor] = useState(defaultFolderColor)
   const [folderIconUrl, setFolderIconUrl] = useState(defaultFolderIconUrl)
@@ -324,26 +332,9 @@ export function AllFilesPage() {
     }
   }
 
-  function selectUploadFiles(files: FileList | File[] | null | undefined) {
-    if (!files) return
-    const nextFiles = Array.from(files)
-    if (nextFiles.length === 0) return
-    setSelectedFiles(nextFiles)
-  }
-
   function removeUploadFile(index: number) {
     setSelectedFiles((files) => files.filter((_, fileIndex) => fileIndex !== index))
   }
-
-  function handleUploadDrag(event: DragEvent<HTMLLabelElement>) {
-    event.preventDefault()
-    event.stopPropagation()
-    if (event.type === 'dragenter' || event.type === 'dragover') setIsUploadDragging(true)
-    if (event.type === 'dragleave' || event.type === 'drop') setIsUploadDragging(false)
-    if (event.type === 'drop') selectUploadFiles(event.dataTransfer.files)
-  }
-
-
 
   function openContext(event: MouseEvent<HTMLElement>, file: FileItem) {
     event.preventDefault()
@@ -497,6 +488,24 @@ export function AllFilesPage() {
     window.dispatchEvent(new Event('OpenXdrive:storage-changed'))
   }
 
+  async function updateFileCollection(file: FileItem, operation: 'starred' | 'archived') {
+    if (!file.id) return
+    try {
+      const isEnabled = operation === 'starred' ? !file.starredAt : !file.archivedAt
+      await apiFetch(`/files/${file.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ [operation]: isEnabled }),
+      })
+      setMessage(operation === 'starred'
+        ? (isEnabled ? 'File added to Starred.' : 'File removed from Starred.')
+        : (isEnabled ? 'File moved to Archive.' : 'File restored from Archive.'))
+      setSelectedFileIds(current => { const next = new Set(current); next.delete(file.id!); return next })
+      await loadFiles()
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not update file.')
+    }
+  }
+
   async function shareFile() {
     if (!activeFile?.id) return
     const data = await apiFetch<{ url: string }>(`/files/${activeFile.id}/share`, { method: 'POST' })
@@ -630,26 +639,8 @@ export function AllFilesPage() {
     const sizeLabels: FolderSizeScale[] = ['xs', 'sm', 'md', 'lg']
     setHeaderActions(
       <div className="flex items-center gap-2">
-        {/* Folder size scale picker */}
-        <div className="hidden sm:flex items-center gap-0.5 rounded-xl border border-slate-200 bg-slate-50 p-0.5">
-          {sizeLabels.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => changeFolderSize(s)}
-              className={[
-                'rounded-lg px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide transition-all border border-transparent',
-                folderSizeScale === s
-                  ? sizeActiveClasses[s]
-                  : 'text-slate-400 hover:text-slate-600',
-              ].join(' ')}
-              aria-label={`Folder size ${s}`}
-              aria-pressed={folderSizeScale === s}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
+        <Segmented aria-label="Folder tile size" value={folderSizeScale} onChange={value => changeFolderSize(value as FolderSizeScale)}
+          options={sizeLabels.map(value => ({value,label:value.toUpperCase()}))} size="small" />
         {/* Divider */}
         <div className="hidden sm:block h-6 w-px bg-slate-200" />
         <Button size="sm" onClick={() => setUploadOpen(true)}>
@@ -664,6 +655,7 @@ export function AllFilesPage() {
         </Button>
       </div>
     )
+    return () => setHeaderActions(null)
   }, [syncingDrive, folderSizeScale])
 
 
@@ -689,76 +681,103 @@ export function AllFilesPage() {
   return (
     <>
       <div onContextMenu={openEmptyContextMenu} className="min-h-[620px] w-full min-w-0">
-      <PageHeader title={activeFolder ? <span className="block min-w-0 truncate"><button className="text-blue-600 hover:underline" onClick={closeFolder}>All Files</button>{folderBreadcrumbs.map((folder, index) => <span key={folder.id}><span className="text-slate-400"> / </span>{index === folderBreadcrumbs.length - 1 ? <span>{folder.name}</span> : <button className="text-blue-600 hover:underline" onClick={() => folder.id && openFolderById(folder.id)}>{folder.name}</button>}</span>)}</span> : 'All Files'} />
+      <PageHeader title={activeFolder ?
+        <span style={{display:'inline-flex',alignItems:'baseline',gap:8,flexWrap:'wrap'}}>
+          <Typography.Link href="#" onClick={e=>{e.preventDefault();closeFolder()}}>All files</Typography.Link>
+          {folderBreadcrumbs.map((folder,index)=><span key={folder.id} style={{display:'inline-flex',gap:8,alignItems:'baseline'}}>
+            <Typography.Text type="secondary">/</Typography.Text>
+            {index===folderBreadcrumbs.length-1 ? <Typography.Text strong>{folder.name}</Typography.Text> :
+              <Typography.Link href="#" onClick={e=>{e.preventDefault();folder.id&&openFolderById(folder.id)}}>{folder.name}</Typography.Link>}
+          </span>)}
+        </span> : 'All files'} />
+
       {/* Action buttons row — visible on mobile/tablet, hidden on desktop (desktop uses header slot) */}
       <div className="mt-4 flex flex-wrap items-center gap-2 lg:hidden">
         <Button size="sm" onClick={() => setUploadOpen(true)}><Upload className="h-3.5 w-3.5" />Upload</Button>
         <Button size="sm" variant="outline" onClick={() => setFolderOpen(true)}><FolderPlus className="h-3.5 w-3.5" />New Folder</Button>
         <Button size="sm" variant="outline" disabled={syncingDrive} onClick={syncGoogleDrive}><RefreshCw className={syncingDrive ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />{syncingDrive ? 'Syncing...' : 'Sync'}</Button>
-        <div className="flex items-center gap-0.5 rounded-xl border border-slate-200 bg-slate-50 p-0.5">
-          {(['xs','sm','md','lg'] as FolderSizeScale[]).map((s) => (
-            <button key={s} type="button" onClick={() => changeFolderSize(s)} className={['rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-wide transition-all border border-transparent', folderSizeScale === s ? sizeActiveClasses[s] : 'text-slate-400 hover:text-slate-600'].join(' ')} aria-label={`Folder size ${s}`}>{s}</button>
-          ))}
-        </div>
+        <Segmented aria-label="Folder tile size" value={folderSizeScale}
+          onChange={value => changeFolderSize(value as FolderSizeScale)}
+          size="small" options={(['xs','sm','md','lg'] as FolderSizeScale[]).map(value=>({value,label:value.toUpperCase()}))}/>
+
       </div>
-      {message ? <p className="mt-3 rounded-xl bg-blue-50 p-3 text-sm text-blue-700">{message}</p> : null}
-      {!activeFolder && (recentFolders.length > 0 ? <FolderGrid items={recentFolders} mobileTwoColumns sizeScale={folderSizeScale} onFolderMenu={openFolderMenu} onFolderOpen={openFolder} onDropItem={handleDropItem} /> : <p className="mt-4 rounded-xl bg-slate-50 p-5 text-sm text-slate-500">No folders yet. Click New Folder to organize uploads.</p>)}
+      {message ? <Alert style={{marginTop:16}} type="info" showIcon closable message={message} onClose={()=>setMessage('')} /> : null}
+      {!activeFolder && (recentFolders.length > 0 ? <FolderGrid items={recentFolders} mobileTwoColumns sizeScale={folderSizeScale} onFolderMenu={openFolderMenu} onFolderOpen={openFolder} onDropItem={handleDropItem} /> : <Card className="mt-4 p-3"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No folders yet"><AntButton icon={<FolderPlus />} onClick={()=>setFolderOpen(true)}>New folder</AntButton></Empty></Card>)}
       {!activeFolder && moreFolders.length > 0 ? <>
-        <h2 className="mt-4 font-extrabold text-slate-700">More Folders</h2>
+        <Typography.Title level={5} style={{marginTop:24}}>More folders</Typography.Title>
         <FolderGrid items={moreFolders} sizeScale={folderSizeScale} onFolderMenu={openFolderMenu} onFolderOpen={openFolder} onDropItem={handleDropItem} />
       </> : null}
       {activeFolder && folders.length > 0 ? <>
-        <h2 className="mt-4 font-extrabold text-slate-700">Folders</h2>
+        <Typography.Title level={5} style={{marginTop:24}}>Folders</Typography.Title>
         <FolderGrid items={folders} sizeScale={folderSizeScale} onFolderMenu={openFolderMenu} onFolderOpen={openFolder} onDropItem={handleDropItem} />
       </> : null}
-      <div className="mt-4 flex flex-col gap-2 sm:mt-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-3"><Button variant="soft" className="hidden sm:inline-flex"><Archive className="h-4 w-4" />Recents</Button><Button variant="soft" className="hidden sm:inline-flex"><Star className="h-4 w-4" />Starred</Button>{selectedFileIds.size > 0 ? <div className="flex w-full flex-col gap-3 rounded-2xl border border-orange-500/20 bg-orange-500/10 p-3 sm:w-auto sm:flex-row sm:items-center sm:border-0 sm:bg-transparent sm:p-0"><span className="text-sm font-extrabold text-slate-700">{selectedFileIds.size} selected</span><div className="grid grid-cols-4 gap-2 sm:flex sm:gap-3"><Button className="w-full" variant="outline" onClick={downloadBatchAsZip}><Download className="h-4 w-4" />ZIP</Button><Button className="w-full" variant="outline" onClick={() => setMoveOpen(true)}><FolderInput className="h-4 w-4" />Move</Button><Button className="w-full" variant="danger" onClick={() => setDeleteOpen(true)}><Trash2 className="h-4 w-4" />Delete</Button><Button className="w-full" variant="ghost" onClick={clearSelection}>Clear</Button></div></div> : null}</div>
-        <div className="flex gap-3"><Button variant={fileViewMode === 'grid' ? 'soft' : 'outline'} size="icon" aria-label="Show files as grid" aria-pressed={fileViewMode === 'grid'} onClick={() => changeFileViewMode('grid')}><LayoutGrid className="h-5 w-5" /></Button><Button variant={fileViewMode === 'list' ? 'soft' : 'outline'} size="icon" aria-label="Show files as list" aria-pressed={fileViewMode === 'list'} onClick={() => changeFileViewMode('list')}><List className="h-5 w-5" /></Button></div>
+      <div className="ox-context-utility" style={{marginTop:22,flexWrap:'wrap',justifyContent:'space-between'}}>
+        <Space wrap size={8}>
+          {selectedFileIds.size>0 ? <>
+            <strong>{selectedFileIds.size} selected</strong>
+            <Button variant="outline" size="sm" onClick={downloadBatchAsZip}><Download className="h-4 w-4" />Download ZIP</Button>
+            <Button variant="outline" size="sm" onClick={()=>setMoveOpen(true)}><FolderInput className="h-4 w-4" />Move</Button>
+            <Button variant="danger" size="sm" onClick={()=>setDeleteOpen(true)}><Trash2 className="h-4 w-4" />Delete</Button>
+            <Button variant="ghost" size="sm" onClick={clearSelection}>Clear</Button>
+          </> : <span className="text-sm font-semibold">{files.length} {files.length===1?'file':'files'}</span>}
+        </Space>
+        <Segmented value={fileViewMode} onChange={v=>changeFileViewMode(v as FileViewMode)} options={[
+          {value:'list',label:<Space size={5}><UnorderedListOutlined />List</Space>},
+          {value:'grid',label:<Space size={5}><AppstoreOutlined />Grid</Space>},
+        ]}/>
       </div>
-      {cutFolder ? <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-700"><ClipboardPaste className="mr-2 inline h-4 w-4" />Cut folder: {cutFolder.name}. Press Ctrl+V or right-click empty area to paste here.</p> : null}
+      {cutFolder ? <Alert type="warning" showIcon style={{marginTop:12}} message={`Moving: ${cutFolder.name}`} description="Open a destination folder and press Ctrl+V, or right-click an empty area to paste."/> : null}
       {files.length === 0 ? (
-        <Card className="mt-3 p-5 bg-white/10 backdrop-blur-sm border border-white/20 dark:bg-transparent dark:border-0 dark:p-0 dark:shadow-none">
-          <p className="text-sm text-slate-500">{searchQuery ? `No files found for "${searchQuery}".` : activeFolder ? 'No files in this folder yet.' : 'No uploaded files yet. Connect Google Drive in Settings, then upload a file.'}</p>
+        <Card className="mt-3 p-5">
+          <Empty description={searchQuery ? `No files match "${searchQuery}"` : activeFolder ? 'No files in this folder' : 'Your workspace has no files yet'}>
+            {!searchQuery && <Button type="button" onClick={()=>setUploadOpen(true)}>Upload your first file</Button>}
+          </Empty>
         </Card>
       ) : (
-        <Card className="mt-3 p-4 sm:p-5 bg-white/10 backdrop-blur-sm border border-white/20 dark:bg-transparent dark:border-0 dark:p-0 dark:shadow-none">
+        <Card className="mt-3 p-4 sm:p-5">
           {fileViewMode === 'grid' ? (
-            <FileGrid files={files} selectedFileIds={selectedFileIds} sizeScale={folderSizeScale} onToggleFile={toggleFileSelection} onFileContextMenu={openContext} />
+            <FileGrid files={files} selectedFileIds={selectedFileIds} sizeScale={folderSizeScale} onToggleFile={toggleFileSelection} onFileContextMenu={openContext} onToggleStar={file => updateFileCollection(file, 'starred')} onToggleArchive={file => updateFileCollection(file, 'archived')} />
           ) : (
-            <FileTable files={files} selectedFileIds={selectedFileIds} allSelected={allVisibleSelected} onToggleFile={toggleFileSelection} onToggleAll={toggleAllVisibleFiles} onFileContextMenu={openContext} />
+            <FileTable files={files} selectedFileIds={selectedFileIds} allSelected={allVisibleSelected} onToggleFile={toggleFileSelection} onToggleAll={toggleAllVisibleFiles} onFileContextMenu={openContext} onToggleStar={file => updateFileCollection(file, 'starred')} onToggleArchive={file => updateFileCollection(file, 'archived')} />
           )}
         </Card>
       )}
       </div>
       <EmptyAreaContextMenu x={emptyContextMenu.x} y={emptyContextMenu.y} open={emptyContextMenu.open} canPasteFolder={Boolean(cutFolder)} onClose={() => setEmptyContextMenu({ x: 0, y: 0, open: false })} onUpload={() => { setUploadOpen(true); setEmptyContextMenu({ x: 0, y: 0, open: false }) }} onCreateFolder={() => { setFolderOpen(true); setEmptyContextMenu({ x: 0, y: 0, open: false }) }} onPasteFolder={() => { pasteFolder().catch((error) => setMessage(error instanceof Error ? error.message : 'Failed to paste folder')); setEmptyContextMenu({ x: 0, y: 0, open: false }) }} />
-      <FileContextMenu x={contextMenu.x} y={contextMenu.y} file={contextMenu.file} onClose={() => setContextMenu({ x: 0, y: 0, file: null })} onView={viewFile} onDownload={downloadFile} onRename={() => { setRenameValue(activeFile?.name ?? ''); setRenameOpen(true); setContextMenu({ x: 0, y: 0, file: null }) }} onMove={() => { setMoveOpen(true); setContextMenu({ x: 0, y: 0, file: null }) }} onDetails={() => { setDetailOpen(true); setContextMenu({ x: 0, y: 0, file: null }) }} onShare={shareFile} onCopyLink={copyShareLinkDirect} onInvite={inviteToFile} onDelete={() => { setDeleteOpen(true); setContextMenu({ x: 0, y: 0, file: null }) }} />
+      <FileContextMenu x={contextMenu.x} y={contextMenu.y} file={contextMenu.file} onClose={() => setContextMenu({ x: 0, y: 0, file: null })} onView={viewFile} onDownload={downloadFile} onRename={() => { setRenameValue(activeFile?.name ?? ''); setRenameOpen(true); setContextMenu({ x: 0, y: 0, file: null }) }} onMove={() => { setMoveOpen(true); setContextMenu({ x: 0, y: 0, file: null }) }} onDetails={() => { setDetailOpen(true); setContextMenu({ x: 0, y: 0, file: null }) }} onShare={shareFile} onCopyLink={copyShareLinkDirect} onInvite={inviteToFile} onToggleStar={() => activeFile && updateFileCollection(activeFile, 'starred')} onToggleArchive={() => activeFile && updateFileCollection(activeFile, 'archived')} onDelete={() => { setDeleteOpen(true); setContextMenu({ x: 0, y: 0, file: null }) }} />
       <FolderContextMenu x={folderContextMenu.x} y={folderContextMenu.y} folder={folderContextMenu.folder} onClose={() => setFolderContextMenu({ x: 0, y: 0, folder: null })} onCut={() => cutSelectedFolder(activeFolderForMenu)} onRename={() => { setFolderRenameValue(activeFolderForMenu?.name ?? ''); setFolderRenameColor(normalizeFolderColor(activeFolderForMenu?.color)); setFolderRenameIconUrl(activeFolderForMenu?.iconUrl ?? defaultFolderIconUrl); setFolderRenameOpen(true); setFolderContextMenu({ x: 0, y: 0, folder: null }) }} onInvite={inviteToFolder} onCopyLink={copyFolderLink} onDelete={() => { setFolderDeleteOpen(true); setFolderContextMenu({ x: 0, y: 0, folder: null }) }} />
       <FileDetailsDrawer open={detailOpen} file={activeFile} onClose={() => setDetailOpen(false)} />
 
-      <DummyModal open={uploadOpen} title="Upload File" description="Stream file directly to selected Google Drive account." onClose={() => setUploadOpen(false)}>
+      <DummyModal open={uploadOpen} title="Upload File" description="Stream files directly to your Google Drive or S3-compatible storage." onClose={() => setUploadOpen(false)}>
         <form onSubmit={uploadFile} className="grid gap-4">
-           <label onDragEnter={handleUploadDrag} onDragOver={handleUploadDrag} onDragLeave={handleUploadDrag} onDrop={handleUploadDrag} className={isUploadDragging ? 'grid cursor-pointer gap-3 rounded-2xl border-2 border-dashed border-blue-500 bg-blue-50 p-4 text-center transition sm:p-6' : 'grid cursor-pointer gap-3 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-4 text-center transition hover:border-blue-300 hover:bg-blue-50/50 sm:p-6'}>
-            <Upload className={isUploadDragging ? 'mx-auto h-8 w-8 text-blue-600' : 'mx-auto h-8 w-8 text-slate-500'} />
-            <span className="text-sm font-extrabold text-slate-950">Drop file here or click to browse</span>
-            <span className="text-xs text-slate-500">Metadata is sent before the file so upload can stream directly to Google Drive.</span>
-            <Input type="file" className="sr-only" multiple onChange={(event) => selectUploadFiles(event.target.files)} required={selectedFiles.length === 0} />
-          </label>
+           <AntUpload.Dragger
+             multiple
+             showUploadList={false}
+             beforeUpload={file => {
+               setSelectedFiles(current => {
+                 const duplicate=current.some(item=>item.name===file.name && item.size===file.size && item.lastModified===file.lastModified)
+                 return duplicate ? current : [...current, file]
+               })
+               return false
+             }}
+             style={{borderRadius:12,background:'var(--ox-canvas)',padding:'12px'}}
+           >
+             <p className="ant-upload-drag-icon"><InboxOutlined /></p>
+             <p className="ant-upload-text">Drag files here or select from your device</p>
+             <p className="ant-upload-hint">Uploads stream to the selected Google Drive or S3 storage account.</p>
+           </AntUpload.Dragger>
           <label className="grid gap-2 text-sm font-semibold">
             Target Storage Account
-            <select
-              className="h-11 rounded-xl border border-slate-200 px-3 text-sm bg-white"
+            <Select
               value={selectedTargetAccountId}
-              onChange={(event) => setSelectedTargetAccountId(event.target.value)}
-            >
-              <option value="">Automatic (Default)</option>
-              {connectedAccounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.email || account.displayName || account.id} ({account.provider === 's3' ? 'S3' : 'Google Drive'})
-                </option>
-              ))}
-            </select>
+              onChange={setSelectedTargetAccountId}
+              options={[
+                {value:'',label:'Automatic (recommended)'},
+                ...connectedAccounts.map(account=>({value:account.id,label:`${account.email || account.displayName || account.id} (${account.provider === 's3' ? 'S3' : 'Google Drive'})`})),
+              ]}
+            />
           </label>
-          {activeFolder ? <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">Uploading to: <b>{activeFolder.name}</b></p> : <label className="grid gap-2 text-sm font-semibold">Virtual Folder<select className="h-11 rounded-xl border border-slate-200 px-3 text-sm bg-white" value={selectedFolderId} onChange={(event) => setSelectedFolderId(event.target.value)}><option value="">No folder</option>{allFolders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></label>}
+          {activeFolder ? <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">Uploading to: <b>{activeFolder.name}</b></p> : <label className="grid gap-2 text-sm font-semibold">Virtual folder<Select value={selectedFolderId} onChange={setSelectedFolderId} options={[{value:"",label:"No folder"},...allFolders.filter(folder=>folder.id).map(folder=>({value:folder.id!,label:folder.name}))]} /></label>}
           {selectedFiles.length > 0 ? <div className="grid max-h-56 gap-2 overflow-y-auto rounded-xl bg-slate-50 p-3 text-sm text-slate-600"><div className="flex items-center justify-between gap-3"><span className="font-bold text-slate-950">{selectedFiles.length} selected</span><span className="shrink-0">{formatBytes(selectedFiles.reduce((total, file) => total + file.size, 0))}</span></div>{selectedFiles.map((file, index) => <div key={`${file.name}-${file.size}-${index}`} className="flex min-w-0 items-center justify-between gap-3 rounded-lg bg-white px-3 py-2"><span className="min-w-0 flex-1 truncate" title={file.name}>{file.name}</span><span className="shrink-0 text-xs text-slate-500">{formatBytes(file.size)}</span><button type="button" className="shrink-0 text-slate-500 hover:text-red-600" onClick={() => removeUploadFile(index)} aria-label={`Remove ${file.name}`}><X className="h-4 w-4" /></button></div>)}</div> : null}
           <div className="grid gap-3 sm:flex sm:justify-end"><Button type="button" variant="outline" onClick={() => setUploadOpen(false)}>Cancel</Button><Button disabled={loading || selectedFiles.length === 0}>{loading ? 'Uploading...' : `Upload${selectedFiles.length > 1 ? ` ${selectedFiles.length} files` : ''}`}</Button></div>
         </form>
@@ -771,8 +790,8 @@ export function AllFilesPage() {
         </form>
       </DummyModal>
       <DummyModal open={renameOpen} title="Rename File" description={activeFile?.name ?? ''} onClose={() => setRenameOpen(false)}><form onSubmit={renameFile} className="grid gap-4"><Input value={renameValue} onChange={(event) => setRenameValue(event.target.value)} required /><div className="flex justify-end gap-3"><Button type="button" variant="outline" onClick={() => setRenameOpen(false)}>Cancel</Button><Button>Rename</Button></div></form></DummyModal>
-      <DummyModal open={moveOpen} title="Move to Folder" description={selectedFileIds.size > 0 ? `Move ${selectedFileIds.size} files` : activeFile?.name ?? ''} onClose={() => setMoveOpen(false)}><form onSubmit={moveFile} className="grid gap-4"><select className="h-11 rounded-xl border border-slate-200 px-3 text-sm" value={selectedFolderId} onChange={(event) => setSelectedFolderId(event.target.value)}><option value="">No folder</option>{allFolders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select><div className="flex justify-end gap-3"><Button type="button" variant="outline" onClick={() => setMoveOpen(false)}>Cancel</Button><Button>Move</Button></div></form></DummyModal>
-      <DummyModal open={deleteOpen} title={selectedFileIds.size > 0 ? 'Delete Files' : 'Delete File'} description={selectedFileIds.size > 0 ? `Delete ${selectedFileIds.size} files from Google Drive?` : `Delete ${activeFile?.name ?? 'file'} from Google Drive?`} onClose={() => setDeleteOpen(false)}><div className="flex justify-end gap-3"><Button variant="outline" onClick={() => setDeleteOpen(false)}>Cancel</Button><Button variant="danger" onClick={deleteFile}>Delete</Button></div></DummyModal>
+      <DummyModal open={moveOpen} title="Move to Folder" description={selectedFileIds.size > 0 ? `Move ${selectedFileIds.size} files` : activeFile?.name ?? ''} onClose={() => setMoveOpen(false)}><form onSubmit={moveFile} className="grid gap-4"><Select value={selectedFolderId} onChange={setSelectedFolderId} options={[{value:"",label:"No folder"},...allFolders.filter(folder=>folder.id).map(folder=>({value:folder.id!,label:folder.name}))]} /><div className="flex justify-end gap-3"><Button type="button" variant="outline" onClick={() => setMoveOpen(false)}>Cancel</Button><Button>Move</Button></div></form></DummyModal>
+      <DummyModal open={deleteOpen} title={selectedFileIds.size > 0 ? 'Delete Files' : 'Delete File'} description={selectedFileIds.size > 0 ? `Move ${selectedFileIds.size} files to the recycle bin?` : `Move ${activeFile?.name ?? 'file'} to the recycle bin?`} onClose={() => setDeleteOpen(false)}><div className="flex justify-end gap-3"><Button variant="outline" onClick={() => setDeleteOpen(false)}>Cancel</Button><Button variant="danger" onClick={deleteFile}>Delete</Button></div></DummyModal>
       <DummyModal open={shareOpen} title="Share Link" description={activeFile?.name ?? ''} onClose={() => setShareOpen(false)}>
         <div className="grid gap-4">
           <div>
@@ -789,34 +808,40 @@ export function AllFilesPage() {
             <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 grid gap-3">
               <div>
                 <label className="text-xs font-bold text-slate-500 block mb-1">Google Drive Direct Link (Public Access)</label>
-                <p className="text-xs text-slate-500 mb-2">Configure this file to be publicly accessible on Google Drive so external tools can edit/download it.</p>
+                <p className="text-xs text-slate-500 mb-2">Anyone with the direct Google Drive link will be able to view or download this file. Make sure it contains no private information.</p>
               </div>
               {gdrivePublicUrl ? (
                 <div className="grid gap-2">
-                  <Input value={gdrivePublicUrl} readOnly />
-                  <p className="rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">Google Drive public link generated and copied to clipboard!</p>
+                  <Typography.Paragraph copyable={{ text: gdrivePublicUrl }} style={{ overflowWrap: 'anywhere', marginBottom: 4 }}>{gdrivePublicUrl}</Typography.Paragraph>
+                  <Typography.Text type="secondary">Public read-only link created. Use the copy control above to share it.</Typography.Text>
                 </div>
               ) : (
-                <Button
-                  variant="outline"
-                  disabled={makingPublic}
-                  onClick={async () => {
+                <Popconfirm
+                  title="Make this file public?"
+                  description="Anyone with this link can view or download the file."
+                  okText="Make public (view only)"
+                  cancelText="Keep private"
+                  onConfirm={async () => {
                     if (!activeFile?.id) return
                     setMakingPublic(true)
                     try {
                       const res = await apiFetch<{ url: string }>('/files/' + activeFile.id + '/public-permission', { method: 'POST' })
                       setGdrivePublicUrl(res.url)
-                      await navigator.clipboard.writeText(res.url)
-                    } catch (err: any) {
-                      alert('Failed to update Google Drive permission: ' + (err.message || err))
+                    } catch (err) {
+                      alert('Failed to update Google Drive permission: ' + (err instanceof Error ? err.message : String(err)))
                     } finally {
                       setMakingPublic(false)
                     }
                   }}
+                >
+                <Button
+                  variant="outline"
+                  disabled={makingPublic}
                   className="w-full text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100 dark:text-blue-400 dark:bg-blue-950/30 dark:border-blue-900/50"
                 >
-                  {makingPublic ? 'Making Public...' : 'Make Public & Copy GDrive Link'}
+                  {makingPublic ? 'Making public...' : 'Make public (view only)'}
                 </Button>
+                </Popconfirm>
               )}
             </div>
           )}
@@ -827,12 +852,12 @@ export function AllFilesPage() {
       <DummyModal open={inviteOpen} title="Invite Member" description={`Share ${inviteTargetType === 'file' ? (activeFile?.name ?? 'file') : (activeFolderForMenu?.name ?? 'folder')} with a team member.`} onClose={() => setInviteOpen(false)}>
         <form onSubmit={sendInvite} className="grid gap-4">
           <label className="grid gap-2 text-sm font-semibold">Email Address<Input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="member@example.com" required /></label>
-          <label className="grid gap-2 text-sm font-semibold">Role<select className="h-11 rounded-xl border border-slate-200 px-3 text-sm" value={inviteRole} onChange={(event) => setInviteRole(event.target.value)}><option value="viewer">Can view</option><option value="editor">Can edit</option></select></label>
+          <label className="grid gap-2 text-sm font-semibold">Role<Select value={inviteRole} onChange={setInviteRole} options={[{value:"viewer",label:"Can view"},{value:"editor",label:"Can edit"}]} /></label>
           {inviteMessage ? <p className="rounded-xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">{inviteMessage}</p> : null}
           <div className="flex justify-end gap-3 pt-2"><Button type="button" variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button><Button disabled={inviting}>{inviting ? 'Sending...' : 'Send Invite'}</Button></div>
         </form>
       </DummyModal>
-      <DummyModal open={previewOpen} title="File Preview" description={activeFile?.name ?? ''} onClose={closePreview} className="overflow-hidden sm:max-w-[95vw] xl:max-w-[1400px]">
+      <DummyModal open={previewOpen} title="File Preview" description={activeFile?.name ?? ''} onClose={closePreview} width="min(1400px, 95vw)" className="overflow-hidden">
         <div className="flex h-[72dvh] w-full items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 sm:h-[80vh]">
           {previewLoading ? <div className="p-6 text-center text-sm font-semibold text-slate-500">Loading preview...</div> : null}
           {previewError ? <div className="p-6 text-center text-sm text-red-600">{previewError}</div> : null}

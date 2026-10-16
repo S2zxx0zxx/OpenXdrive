@@ -1,101 +1,77 @@
 import { useEffect, useState } from 'react'
-import { Clock, FileArchive, Folder, Trash2, Users, UserCheck } from 'lucide-react'
-import { MetricCard } from '@/components/drive/MetricCard'
+import { Alert, App, Button, Card, Col, Empty, Row, Space, Statistic, Table, Tag, Typography, type TableColumnsType } from 'antd'
+import { DeleteOutlined, FileOutlined, FolderOutlined, ShareAltOutlined, TeamOutlined, ClockCircleOutlined } from '@ant-design/icons'
 import { PageHeader } from '@/components/drive/PageHeader'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { apiFetch, formatBytes, formatDate } from '@/lib/api'
-import { cn } from '@/lib/utils'
 
-type InviteTarget = { id: string; name: string; type: 'file' | 'folder'; mimeType?: string; sizeBytes?: string }
+type Target = { id:string;name:string;type:'file'|'folder';mimeType?:string;sizeBytes?:string }
 type Invite = {
-  id: string
-  email: string
-  role: string
-  status: string
-  targetType: 'file' | 'folder'
-  targetId: string
-  target: InviteTarget | null
-  createdAt: string
-  acceptedAt: string | null
-  user: { id: string; name: string; email: string } | null
+ id:string; email:string; role:string;status:string;targetType:'file'|'folder';targetId:string;
+ target:Target|null;createdAt:string;acceptedAt:string|null; user:{id:string;name:string;email:string}|null
 }
-
-function ResourceIcon({ type }: { type: 'file' | 'folder' }) {
-  return type === 'folder' ? <Folder className="h-5 w-5 text-blue-600" /> : <FileArchive className="h-5 w-5 text-blue-600" />
+function statusTag(status:string) {
+ return <Tag color={status==='accepted'?'green':status==='pending'?'orange':'default'}>{status}</Tag>
 }
-
 export function SharedPage() {
-  const [sentInvites, setSentInvites] = useState<Invite[]>([])
-  const [receivedInvites, setReceivedInvites] = useState<Invite[]>([])
-  const [message, setMessage] = useState('')
-  const pendingCount = sentInvites.filter((invite) => invite.status === 'pending').length
-  const acceptedCount = sentInvites.filter((invite) => invite.status === 'accepted').length
-
-  async function loadInvites() {
-    const data = await apiFetch<{ sent: Invite[]; received: Invite[] }>('/invites')
-    setSentInvites(data.sent)
-    setReceivedInvites(data.received)
-  }
-
-  useEffect(() => {
-    loadInvites().catch((error) => setMessage(error instanceof Error ? error.message : 'Failed to load shared resources'))
-    window.addEventListener('OpenXdrive:invites-changed', loadInvites)
-    return () => window.removeEventListener('OpenXdrive:invites-changed', loadInvites)
-  }, [])
-
-  async function revokeInvite(id: string) {
-    await apiFetch(`/invites/${id}`, { method: 'DELETE' })
-    await loadInvites()
-  }
-
-  return (
-    <>
-      <PageHeader title="Shared" description="Files and folders shared with members or shared with you." />
-      {message ? <p className="mt-5 rounded-xl bg-blue-50 p-3 text-sm text-blue-700">{message}</p> : null}
-      <div className="mt-8 grid gap-4 md:grid-cols-3">
-        <MetricCard label="Shared Resources" value={String(sentInvites.length + receivedInvites.length)} icon={Users} />
-        <MetricCard label="Accepted Members" value={String(acceptedCount)} icon={UserCheck} />
-        <MetricCard label="Pending Invites" value={String(pendingCount)} icon={Clock} />
-      </div>
-
-      <Card className="mt-8 p-5">
-        <h2 className="font-extrabold">Shared With You</h2>
-        <div className="mt-4 grid gap-3">
-          {receivedInvites.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">No files or folders have been shared with you yet.</p> : receivedInvites.map((invite) => (
-            <div key={invite.id} className="flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex min-w-0 items-center gap-3">
-                <ResourceIcon type={invite.targetType} />
-                <div className="min-w-0"><p className="truncate font-semibold text-slate-950">{invite.target?.name ?? 'Unavailable resource'}</p><p className="text-sm text-slate-500 capitalize">{invite.targetType} • {invite.role}{invite.target?.sizeBytes ? ` • ${formatBytes(invite.target.sizeBytes)}` : ''}</p></div>
-              </div>
-              <span className={cn('w-fit rounded-full px-3 py-1 text-xs font-bold capitalize', invite.status === 'accepted' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700')}>{invite.status}</span>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      <Card className="mt-6 p-5">
-        <h2 className="font-extrabold">Resources You Shared</h2>
-        <div className="mt-4 grid gap-3">
-          {sentInvites.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">No files or folders shared yet. Use Invite Members from the top bar.</p> : sentInvites.map((invite) => (
-            <div key={invite.id} className="flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex min-w-0 items-center gap-3">
-                <ResourceIcon type={invite.targetType} />
-                <div className="min-w-0">
-                  <p className="truncate font-semibold text-slate-950">{invite.target?.name ?? 'Unavailable resource'}</p>
-                  <p className="break-all text-sm text-slate-500">Shared with {invite.email}</p>
-                  <p className="mt-1 text-xs text-slate-500">Invited {formatDate(invite.createdAt)}</p>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-bold capitalize text-slate-600">{invite.role}</span>
-                <span className={cn('rounded-full px-3 py-1 text-xs font-bold capitalize', invite.status === 'accepted' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700')}>{invite.status}</span>
-                <Button variant="danger" size="sm" onClick={() => revokeInvite(invite.id)}><Trash2 className="h-4 w-4" />Revoke</Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-    </>
-  )
+ const [sent,setSent]=useState<Invite[]>([])
+ const [received,setReceived]=useState<Invite[]>([])
+ const [error,setError]=useState('')
+ const [loading,setLoading]=useState(false)
+ const { modal, message } = App.useApp()
+ async function load() {
+  setLoading(true);setError('')
+  try {
+   const data=await apiFetch<{sent:Invite[];received:Invite[]}>('/invites')
+   setSent(data.sent);setReceived(data.received)
+  } catch (e) {setError(e instanceof Error?e.message:'Unable to load invitations')}
+  finally {setLoading(false)}
+ }
+ useEffect(()=>{
+  load().catch(()=>undefined)
+  window.addEventListener('OpenXdrive:invites-changed',load)
+  return ()=>window.removeEventListener('OpenXdrive:invites-changed',load)
+ },[])
+ function revoke(invite:Invite) {
+  modal.confirm({
+   title:'Revoke this invitation?',
+   content:`This invitation for ${invite.email} will no longer be valid.`,
+   okText:'Revoke',okButtonProps:{danger:true},
+   onOk:async()=>{
+    await apiFetch(`/invites/${invite.id}`,{method:'DELETE'})
+    message.success('Invitation revoked')
+    await load()
+   },
+  })
+ }
+ const base:TableColumnsType<Invite>=[
+  {title:'Resource',key:'resource',render:(_,row)=><Space>{row.targetType==='folder'?<FolderOutlined style={{color:'#1677ff'}}/>:<FileOutlined style={{color:'#1677ff'}}/>}
+   <div><Typography.Text strong>{row.target?.name||'Unavailable resource'}</Typography.Text><Typography.Text type="secondary" style={{display:'block',fontSize:11}}>{row.targetType}{row.target?.sizeBytes?` · ${formatBytes(row.target.sizeBytes)}`:''}</Typography.Text></div></Space>},
+  {title:'Access',dataIndex:'role',key:'role',render:(v:string)=><Tag color="blue">{v}</Tag>},
+  {title:'Status',dataIndex:'status',key:'status',render:statusTag},
+  {title:'Invited',dataIndex:'createdAt',key:'created',render:(v:string)=>formatDate(v)},
+ ]
+ const sentColumns:TableColumnsType<Invite>=[
+  base[0],{title:'Recipient',dataIndex:'email',key:'email'},...base.slice(1),
+  {title:'',key:'actions',width:90,render:(_,row)=><Button danger size="small" type="text" icon={<DeleteOutlined/>} onClick={()=>revoke(row)}>Revoke</Button>},
+ ]
+ const receivedColumns:TableColumnsType<Invite>=[base[0],{title:'Shared by',dataIndex:['user','name'],key:'owner',render:(v:string|undefined,row)=>v||row.email},...base.slice(1)]
+ return <>
+  <PageHeader title="Shared workspace" description="Invitations, recipients and permissions from your real connected account." />
+  {error&&<Alert type="error" message={error} showIcon style={{marginBottom:18}} closable onClose={()=>setError('')}/>}
+  <Row gutter={[16,16]} style={{marginBottom:22}}>
+   <Col xs={12} lg={8}><Card loading={loading}><Statistic title="Shared resources" value={sent.length+received.length} prefix={<ShareAltOutlined/>}/></Card></Col>
+   <Col xs={12} lg={8}><Card loading={loading}><Statistic title="Accepted" value={sent.filter(x=>x.status==='accepted').length} prefix={<TeamOutlined/>}/></Card></Col>
+   <Col xs={24} lg={8}><Card loading={loading}><Statistic title="Pending invitations" value={sent.filter(x=>x.status==='pending').length} prefix={<ClockCircleOutlined/>}/></Card></Col>
+  </Row>
+  <Card title="Shared with you" style={{marginBottom:20}}>
+   <Table rowKey="id" size="middle" dataSource={received} loading={loading} columns={receivedColumns} scroll={{x:720}}
+    pagination={received.length>10?{pageSize:10}:false}
+    locale={{emptyText:<Empty description="No invitations received yet" />}} />
+  </Card>
+  <Card title="Resources you shared" extra={<Typography.Text type="secondary">{sent.length} invitations</Typography.Text>}>
+   <Table rowKey="id" size="middle" dataSource={sent} loading={loading} columns={sentColumns} scroll={{x:810}}
+    pagination={sent.length>10?{pageSize:10}:false}
+    locale={{emptyText:<Empty description="Share a file or folder to see invitations here" />}} />
+  </Card>
+ </>
 }

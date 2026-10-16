@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { HardDrive } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
+import { LockOutlined, MailOutlined, UserOutlined, CloudServerOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
+import { Button, Card, Divider, Input, Space, Tag, Typography, Alert } from 'antd'
 import { GoogleLogo } from '@/components/auth/GoogleLogo'
-import { Input } from '@/components/ui/input'
+import { BrandLogo } from '@/components/drive/BrandLogo'
 import { apiFetch } from '@/lib/api'
 import { setAuthSession, type AuthUser } from '@/lib/auth'
 
@@ -92,26 +91,55 @@ export function RegisterPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 p-5">
-      <Card className="w-full max-w-md p-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600 text-white"><HardDrive className="h-6 w-6" /></div>
-          <div><h1 className="text-2xl font-extrabold">Register</h1><p className="text-sm text-slate-500">Create your storage gateway account.</p></div>
+    <main className="ox-auth-screen">
+      <aside className="ox-auth-aside">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <BrandLogo className="h-11 w-11" />
+          <span style={{ color: 'white', fontSize: 22, fontWeight: 700, letterSpacing: '-.04em' }}>OpenXdrive</span>
         </div>
-        <form onSubmit={submit} className="mt-6 grid gap-4">
-          <label className="grid gap-2 text-sm font-semibold">Name<Input value={name} onChange={(e) => setName(e.target.value)} required /></label>
-          <label className="grid gap-2 text-sm font-semibold">Email<Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
-          <label className="grid gap-2 text-sm font-semibold">Password<Input type="password" minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
-          {recaptchaSiteKey ? <div className="min-h-[78px] overflow-hidden rounded-xl bg-slate-50 p-2"><div ref={recaptchaRef} /></div> : null}
-          {error ? <p className="rounded-xl bg-red-50 p-3 text-sm text-red-600">{error}</p> : null}
-          <Button disabled={loading}>{loading ? 'Creating...' : 'Create Account'}</Button>
-        </form>
-        <div className="mt-4 grid gap-3">
-          <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-slate-400"><span className="h-px flex-1 bg-slate-200" />or<span className="h-px flex-1 bg-slate-200" /></div>
-          <Button variant="outline" disabled={googleLoading} onClick={continueWithGoogle}><GoogleLogo />{googleLoading ? 'Redirecting...' : 'Continue with Google and connect Drive'}</Button>
+        <div>
+          <Tag color="processing" bordered={false} style={{ marginBottom: 24 }}>PRIVATE CLOUD WORKSPACE</Tag>
+          <h1>Every cloud.<br />One workspace.</h1>
+          <p>Bring your Google Drive and S3-compatible storage together. Manage files, share securely, and make the most of space you already have.</p>
+          <div className="ox-brand-pills">
+            <span className="ox-brand-pill"><CloudServerOutlined /> Multi-cloud storage</span>
+            <span className="ox-brand-pill"><SafetyCertificateOutlined /> Self-hosted</span>
+            <span className="ox-brand-pill">No storage subscription required</span>
+          </div>
         </div>
-        <p className="mt-5 text-center text-sm text-slate-500">Already registered? <Link className="font-bold text-blue-600" to="/login">Login</Link></p>
-      </Card>
+        <span style={{ fontSize: 12, color: '#b3c5da' }}>OpenXdrive · Your files stay with your connected providers</span>
+      </aside>
+      <section className="ox-auth-main">
+        <div className="ox-auth-card">
+          <Space align="center" style={{ marginBottom: 24 }}>
+            <BrandLogo className="h-10 w-10" />
+            <div><Typography.Text strong style={{ display: 'block' }}>OpenXdrive</Typography.Text><Typography.Text type="secondary">Cloud storage gateway</Typography.Text></div>
+          </Space>
+          <Card>
+            <div style={{ marginBottom: 26 }}>
+              <Typography.Title level={3} style={{ marginBottom: 6, fontWeight: 700 }}>Create your workspace</Typography.Title>
+              <Typography.Text type="secondary">Start with your existing cloud accounts. No paid plan required.</Typography.Text>
+            </div>
+            <form onSubmit={submit}>
+              <label className="block mb-2 text-sm font-medium" htmlFor="ox-register-name">Full name</label>
+              <Input id="ox-register-name" size="large" value={name} onChange={e => setName(e.target.value)} prefix={<UserOutlined />} autoComplete="name" placeholder="Your name" required style={{ marginBottom: 16 }} />
+              <label className="block mb-2 text-sm font-medium" htmlFor="ox-register-email">Email address</label>
+              <Input id="ox-register-email" size="large" type="email" value={email} onChange={e => setEmail(e.target.value)} prefix={<MailOutlined />} autoComplete="email" placeholder="you@company.com" required style={{ marginBottom: 16 }} />
+              <label className="block mb-2 text-sm font-medium" htmlFor="ox-register-password">Create a password</label>
+              <Input.Password id="ox-register-password" size="large" value={password} onChange={e => setPassword(e.target.value)} prefix={<LockOutlined />} autoComplete="new-password" minLength={8} placeholder="At least 8 characters" required style={{ marginBottom: 16 }} />
+              {recaptchaSiteKey && <div style={{ marginBottom: 16 }}><div ref={recaptchaRef} /></div>}
+              {error && <Alert type="error" message={error} showIcon style={{ marginBottom: 16 }} />}
+              <Button type="primary" htmlType="submit" loading={loading} block size="large">Create free account</Button>
+            </form>
+            <Divider plain>or</Divider>
+            <Button block size="large" icon={<GoogleLogo />} onClick={continueWithGoogle} loading={googleLoading}>Continue with Google</Button>
+            <div style={{ textAlign: 'center', marginTop: 25, fontSize: 13 }}>
+              <Typography.Text type="secondary">Already have an account? </Typography.Text>
+              <Link to="/login">Sign in</Link>
+            </div>
+          </Card>
+        </div>
+      </section>
     </main>
   )
 }

@@ -93,7 +93,7 @@ Security rules:
 - Google tokens are encrypted before database storage.
 - App refresh tokens are hashed before database storage.
 - Auth handoff, share, and preview tokens are stored as hashes where applicable.
-- Uploaded files must stream through backend to Google Drive folder `OpenXdrive`; do not store uploaded files on disk.
+- Uploaded files must stream through backend to the configured Google Drive or S3-compatible storage account; do not store uploaded files on disk.
 - Keep CORS restricted by `FRONTEND_URL`.
 - Keep auth/token storage behavior centralized; do not change without explicit reason.
 
@@ -110,14 +110,14 @@ Stack:
 - Vite 8
 - TypeScript
 - React Router 7
-- Tailwind CSS 4
-- lucide-react
-- class-variance-authority
-- clsx
-- tailwind-merge
+- Ant Design 6 and `@ant-design/icons` (canonical component and icon system)
+- `ConfigProvider` design tokens and responsive Ant Layout, Menu, Table, Modal, Drawer and Form
+- Tailwind CSS 4 (only remaining layout/spacing utilities during migration)
+- clsx and tailwind-merge
 
 Important files:
 - `frontend/src/main.tsx`: React entrypoint.
+- `frontend/src/components/design/AntThemeProvider.tsx`: Ant Design theme provider and color tokens.
 - `frontend/src/App.tsx`: route registration.
 - `frontend/src/layouts/DriveLayout.tsx`: protected app shell, sidebar, header search, storage sidebar stats.
 - `frontend/src/pages/AllFilesPage.tsx`: core file/folder UI, uploads, context menus, preview, share/invite modals.
@@ -138,6 +138,7 @@ Commands:
 - `cd frontend && npm run dev`: start Vite dev server.
 - `cd frontend && npm run build`: typecheck/build frontend.
 - `cd frontend && npm run preview`: preview production build.
+- `cd frontend && bash scripts/smoke-ui.sh`: Chromium smoke checks (requires Chromium; uses a CI-only mocked account for the protected workspace).
 
 Environment:
 - `VITE_API_URL`: backend base URL. Vite embeds this at build time.
@@ -149,9 +150,13 @@ Frontend conventions:
 - Use `apiFetch` for normal JSON API calls.
 - Use raw `fetch` or `XMLHttpRequest` only when response streaming/blob/progress requires it.
 - Keep access/refresh token handling centralized in `frontend/src/lib/api.ts` and `frontend/src/lib/auth.ts`.
-- Use existing `Button`, `Card`, and `Input` primitives before adding new UI primitives.
-- Use `cn` from `frontend/src/lib/utils.ts` for conditional class names.
-- Preserve current Tailwind visual style unless task explicitly asks redesign.
+- Use **Ant Design** for interactive UI, native overlays, tables, forms, search, navigation, loading and notifications. Existing `Button`, `Card`, and `Input` wrappers delegate to Ant Design for compatibility.
+- Use `@ant-design/icons` for interface iconography; never add another icon library or fake generated avatar.
+- Configure colors, spacing and appearance through `AntThemeProvider`; use Tailwind only for remaining non-component layout utilities.
+- Never ship UI placeholder/sample files, fabricated counts, or client-side mock API responses. CI mock data is confined to `frontend/scripts/smoke-authenticated.mjs`.
+- Keep existing upload, preview, tenant-scoped API, OAuth, S3, file/share and auth flows intact.
+- Direct Google Drive public sharing must grant **reader** permission only and require deliberate confirmation; never use `anyone: writer`.
+- Use `cn` from `frontend/src/lib/utils.ts` for conditional layout utility class names.
 - Keep protected dashboard pages inside `ProtectedRoute` and `DriveLayout`.
 - Keep file/folder URL state in query params when it affects navigation, e.g. `folderId` and file search `q`.
 

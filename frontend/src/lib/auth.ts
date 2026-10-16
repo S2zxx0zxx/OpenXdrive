@@ -19,7 +19,15 @@ export function getRefreshToken() {
 
 export function getStoredUser(): AuthUser | null {
   const raw = localStorage.getItem(USER_KEY)
-  return raw ? JSON.parse(raw) as AuthUser : null
+  if (!raw) return null
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return null
+    const user = parsed as Partial<AuthUser>
+    return typeof user.id === 'string' && typeof user.email === 'string' && typeof user.name === 'string' ? user as AuthUser : null
+  } catch {
+    return null
+  }
 }
 
 export function setAuthSession(accessToken: string, refreshToken: string, user: AuthUser) {

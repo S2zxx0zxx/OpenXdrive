@@ -36,7 +36,7 @@ apiKeyRouter.get('/', async (req: AuthRequest, res, next) => {
 apiKeyRouter.post('/', async (req: AuthRequest, res, next) => {
   try {
     const body = createSchema.parse(req.body)
-    const secret = `9d_live_${randomToken(32)}`
+    const secret = `oxd_live_${randomToken(32)}`
     const apiKey = await prisma.apiKey.create({
       data: {
         userId: req.user!.id,

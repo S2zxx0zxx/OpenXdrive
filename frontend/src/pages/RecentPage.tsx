@@ -1,38 +1,43 @@
-import { Clock, Download, Edit3, Eye } from 'lucide-react'
-import { Card } from '@/components/ui/card'
-import { FileTable } from '@/components/drive/FileTable'
-import { MetricCard } from '@/components/drive/MetricCard'
+import { useEffect, useState } from 'react'
+import { Alert, Button, Card, Col, Empty, Row, Skeleton, Space, Statistic, Timeline, Typography } from 'antd'
+import { ClockCircleOutlined, FileAddOutlined, ReloadOutlined, HistoryOutlined } from '@ant-design/icons'
 import { PageHeader } from '@/components/drive/PageHeader'
-import { files } from '@/data/drive-data'
+import { FileTable } from '@/components/drive/FileTable'
+import { apiFetch, formatDate } from '@/lib/api'
+import { toFileItem, type FileResponse } from '@/lib/file-presentation'
 
-const activities = [
-  { text: 'Opened Travel Landing Page', time: '10 minutes ago', icon: Eye },
-  { text: 'Edited Campaign Assets', time: '1 hour ago', icon: Edit3 },
-  { text: 'Downloaded Wedding Video', time: 'Yesterday', icon: Download },
-]
-
+type EventRow = { id: string; action: string; entityType: string; createdAt: string; metadata?: unknown }
 export function RecentPage() {
-  return (
-    <>
-      <PageHeader title="Recent" description="Latest opened and modified files." />
-      <div className="mt-8 grid gap-4 md:grid-cols-3">
-        <MetricCard label="Opened Today" value="8" icon={Eye} />
-        <MetricCard label="Modified" value="4" icon={Edit3} />
-        <MetricCard label="Downloads" value="2" icon={Download} />
-      </div>
-      <Card className="mt-8 p-5">
-        <h2 className="font-extrabold">Activity</h2>
-        <div className="mt-4 grid gap-3">
-          {activities.map((activity) => (
-            <div key={activity.text} className="flex items-center gap-3 rounded-xl bg-slate-50 p-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-blue-600 shadow-sm"><activity.icon className="h-4 w-4" /></div>
-              <div className="flex-1"><p className="font-semibold">{activity.text}</p><p className="text-sm text-slate-500">{activity.time}</p></div>
-              <Clock className="h-4 w-4 text-slate-400" />
-            </div>
-          ))}
-        </div>
-      </Card>
-      <FileTable files={files} mode="recent" />
-    </>
-  )
+  const [files,setFiles] = useState<FileResponse[]>([])
+  const [events,setEvents] = useState<EventRow[]>([])
+  const [loading,setLoading] = useState(true)
+  const [error,setError] = useState('')
+  async function load() {
+    setLoading(true);setError('')
+    try {
+      const [f,e]=await Promise.all([
+        apiFetch<{ files: FileResponse[] }>('/files'),
+        apiFetch<{ logs: EventRow[] }>('/audit-logs'),
+      ])
+      setFiles(f.files);setEvents(e.logs)
+    } catch(err) { setError(err instanceof Error?err.message:'Could not load recent activity') }
+    finally { setLoading(false) }
+  }
+  useEffect(()=>{load().catch(()=>undefined)},[])
+  return <>
+    <PageHeader title="Recent activity" description="Your latest uploads and actual workspace events." actions={<Button icon={<ReloadOutlined />} onClick={()=>load()} loading={loading}>Refresh</Button>} />
+    {error && <Alert type="error" showIcon message={error} style={{marginBottom:18}} />}
+    <Row gutter={[16,16]} style={{marginBottom:20}}>
+      <Col xs={12} md={8}><Card><Statistic title="Active files" value={files.length} prefix={<FileAddOutlined />} /></Card></Col>
+      <Col xs={12} md={8}><Card><Statistic title="Recorded events" value={events.length} prefix={<HistoryOutlined />} /></Card></Col>
+      <Col xs={24} md={8}><Card><Statistic title="Latest event" value={events[0] ? formatDate(events[0].createdAt) : 'None'} valueStyle={{fontSize:17}} prefix={<ClockCircleOutlined />} /></Card></Col>
+    </Row>
+    <Card title="Workspace timeline" style={{marginBottom:18}}>
+      {loading?<Skeleton active paragraph={{rows:3}} />:events.length===0?<Empty description="No recorded activity yet" />:
+        <Timeline items={events.slice(0,8).map(e=>({ color:'blue', children:<Space direction="vertical" size={1}><Typography.Text strong>{e.action.replaceAll('_',' ')}</Typography.Text><Typography.Text type="secondary">{e.entityType} · {formatDate(e.createdAt)}</Typography.Text></Space> }))} />}
+    </Card>
+    <Card title="Recently added files" extra={<Typography.Text type="secondary">{files.length} total</Typography.Text>}>
+      {loading?<Skeleton active paragraph={{rows:5}} />:<FileTable files={files.slice(0,30).map(toFileItem)} />}
+    </Card>
+  </>
 }
